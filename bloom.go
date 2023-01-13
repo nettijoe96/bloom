@@ -1,12 +1,13 @@
 package bloom
 
 import (
+	"crypto/sha512"
 	"errors"
 	"math"
 )
 
 type Bloomer interface {
-	// put in bloom. Bool if successful
+	// put in bloom. true if successful
 	putStr(string) (bool)
 	putBytes([]byte) (bool)
 
@@ -14,14 +15,14 @@ type Bloomer interface {
 	existsStr(string) (bool, float64);
 	existsBytes([]byte) (bool, float64);
 
-	// returns accuracy: (1 - probability of exist returning a false positive at current n entries)
+	// returns accuracy: (probability of exist returning a false positive at current n entries)
 	accuracy() float64;
 }
 
 type Bloom struct {
 	// current number of entries
 	n int
-	
+
 	// bloom filter bytes
 	bs []byte
 
@@ -32,7 +33,7 @@ type Bloom struct {
 	maxFalsePositiveRate *float64
 
 	// optional, maximum number of entries allowed
-	cap *int 
+	cap *int
 }
 
 // Bloom type constructors
@@ -61,7 +62,7 @@ func NewBloom() *Bloom {
 	return NewBloom64()
 }
 
-// cap: max number of entries 
+// cap: max number of entries
 // min_accuracy: max allowed
 // ex: if maxFalsePositiveRate is 0.1 then 10% chance of false positive when capacity is full
 func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) {
@@ -76,24 +77,55 @@ func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) 
 	}
 	if cap != nil {
 		if *cap < 0 {
-			return nil, errors.New("capacity cannot be negative") 
+			return nil, errors.New("capacity cannot be negative")
 		}
 		b.cap = cap
 	}
 	if cap == nil || maxFalsePositiveRate == nil {
-		// do not need to check for compatibility of constraints. 
+		// do not need to check for compatibility of constraints.
 		return b, nil
 	}
 
-	// check if the capacity and min_accuracy are even possible together with 64 byte size
-	// equation: 1 - (1/m)^n where m is bits and n is entries
-	// math here: https://brilliant.org/wiki/bloom-filter/
-	base := 1 - float64(1)/float64(512)
-	calcMaxFalsePositiveRate := math.Pow(base, float64(*cap))
+	// check if the capacity and maxFalsePositiveRate are even possible together with 64 byte size
+	calcMaxFalsePositiveRate := falsePositiveRate(64, *cap)
 	if calcMaxFalsePositiveRate > *maxFalsePositiveRate  {
 		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
-		return nil, errors.New("false positive rate will be higher in full bloom filter than the maxFalsePositiveRate provided")
+		return nil, errors.New("false positive rate will be higher in full capacity bloom filter than the maxFalsePositiveRate provided")
 	}
 
 	return b, nil
+}
+
+// checks for membership of bytes element
+func (b *Bloom) existsBytes(bs []byte) (bool, float64) {
+	h := sha512.Sum512(bs)
+	for i := 0; i < b.size; i++ {
+		if (b.bs[i] | h[i]) != b.bs[i] {
+			// bloom OR hash changes bloom which means there are 1's present in hash not in bloom
+			return false, 1
+		}
+	}
+	return true, b.accuracy()
+}
+
+// checks for membership of string element
+func (b *Bloom) existsStr(s string) (bool, float64) {
+	bs := []byte(s)
+	return b.existsBytes(bs)
+}
+
+// get false positive rate
+func (b *Bloom) accuracy() float64 {
+	if b.n == 0 {
+		return 1
+	}
+	return falsePositiveRate(b.size, b.n)
+}
+
+func falsePositiveRate(n, size int) float64 {
+	// equation: 1 - (1/m)^n where m is bits and n is entries
+	// math here: https://brilliant.org/wiki/bloom-filter/
+	base := 1 - float64(1)/float64(8*size)
+	falsePositiveRate := math.Pow(base, float64(n))
+	return falsePositiveRate
 }
