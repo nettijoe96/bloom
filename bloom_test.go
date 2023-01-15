@@ -13,12 +13,12 @@ func TestBloomConstained(t *testing.T) {
 	// test negative capacity
 	negCap := -1
 	_, err := NewBloomConstrain(&negCap, nil)
-	assert.EqualError(t, err, "capacity cannot be negative")
+	assert.EqualError(t, err, "capacity cannot be less than 1")
 
 	// test negative accuracy
 	negAcc := float64(-1)
 	_, err = NewBloomConstrain(nil, &negAcc)
-	assert.EqualError(t, err, "false positive rate cannot be negative")
+	assert.EqualError(t, err, "false positive rate must be greater than 0")
 
 	// test capacity and accuracy incompatibility
 	cap := 1000
@@ -83,20 +83,8 @@ func TestExistsStr(t *testing.T) {
 	}
 	tests := append(validEntries, invalidEntries...)
 
-	// 256 bits
-	b256 := NewBloom256()
-	// populate
-	for _, test := range validEntries {
-		b256.PutStr(test.entry)
-	}
-	// check if exists
-	for _, test := range tests {
-		got, _ := b256.ExistsStr(test.entry)
-		assert.Equal(t, test.expected, got)
-	}
-
 	// 512 bits
-	b512 := NewBloom512()
+	b512 := NewBloom()
 	// populate
 	for _, test := range validEntries {
 		b512.PutStr(test.entry)
@@ -123,7 +111,7 @@ func TestCapacityConstaint(t *testing.T) {
 }
 
 func TestAccuracyConstaint(t *testing.T) {
-	acc := float64(0)
+	acc := float64(0.001)
 	b, _ := NewBloomConstrain(nil, &acc)
 	_, err := b.PutStr("fail")
 	assert.IsType(t, err, &AccuracyError{})

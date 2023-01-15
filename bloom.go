@@ -1,7 +1,6 @@
 package bloom
 
 import (
-	"crypto/sha256"
 	"crypto/sha512"
 	"errors"
 	"fmt"
@@ -27,10 +26,10 @@ type Bloom struct {
 	n int
 
 	// bloom filter bytes
-	bs []byte
+	bs [64]byte
 
-	// number of bytes. only 32 or 64 allowed
-	size int
+	// always set to 64
+	len int
 
 	// optional, maximum number of entries allowed
 	cap *int
@@ -57,49 +56,32 @@ func (e *AccuracyError) Error() string {
 // Bloom type constructors
 //
 
-// 256 bit bloom filter
-func NewBloom256() *Bloom {
-	return &Bloom{
-		n: 0,
-		bs: make([]byte, 32),
-		size: 32,
-		maxFalsePositiveRate: nil,  // don't care about accuracy unless specified
-		cap: nil,        			// don't care about capacity unless specified
-	}
-}
-
-// 512 bit bloom filter
-func NewBloom512() *Bloom {
-	return &Bloom{
-		n: 0,
-		bs: make([]byte, 64),
-		size: 64,
-		maxFalsePositiveRate: nil,  // don't care about accuracy unless specified
-		cap: nil,        			// don't care about capacity unless specified
-	}
-}
-
 // makes a new bloom of 512 bits
 func NewBloom() *Bloom {
-	return NewBloom512()
+	return &Bloom{
+		n: 0,
+		bs: [64]byte{},
+		len: 64,
+		maxFalsePositiveRate: nil,  // don't care about accuracy unless specified
+		cap: nil,        			// don't care about capacity unless specified
+	}
 }
 
 // cap: max number of entries
 // min_accuracy: max allowed
 // ex: if maxFalsePositiveRate is 0.1 then 10% chance of false positive when capacity is full
 func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) {
-	// use larger 512 bloom filter
-	b := NewBloom512()
+	b := NewBloom()
 
 	if maxFalsePositiveRate != nil {
-		if *maxFalsePositiveRate < 0 {
-			return nil, errors.New("false positive rate cannot be negative")
+		if *maxFalsePositiveRate <= 0 {
+			return nil, errors.New("false positive rate must be greater than 0")
 		}
 		b.maxFalsePositiveRate = maxFalsePositiveRate
 	}
 	if cap != nil {
-		if *cap < 0 {
-			return nil, errors.New("capacity cannot be negative")
+		if *cap < 1 {
+			return nil, errors.New("capacity cannot be less than 1")
 		}
 		b.cap = cap
 	}
@@ -109,7 +91,7 @@ func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) 
 	}
 
 	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
-	calcMaxFalsePositiveRate := falsePositiveRate(b.size, *cap)
+	calcMaxFalsePositiveRate := falsePositiveRate(b.len, *cap)
 	if calcMaxFalsePositiveRate > *maxFalsePositiveRate  {
 		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
 		return nil, errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
@@ -122,6 +104,13 @@ func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) 
 // Methods
 //
 
+// adds string to bloom filter
+func (b *Bloom) PutStr(s string) (*Bloom, error) {
+	bs := []byte(s)
+	return b.PutBytes(bs)
+}
+
+
 // adds byte data to bloom filter
 func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 	if b.cap != nil && b.n == *b.cap{
@@ -129,58 +118,18 @@ func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 	}
 
 	if b.maxFalsePositiveRate != nil {
-		if falsePositiveRate(b.size, b.n + 1) > *b.maxFalsePositiveRate {
+		if falsePositiveRate(b.len, b.n + 1) > *b.maxFalsePositiveRate {
 			return b, &AccuracyError{acc: *b.maxFalsePositiveRate}
 		}
 	}
 
-	if b.size == 32 {
-		var h [32]byte = sha256.Sum256(bs)
-		for i := 0; i < b.size; i++ {
-			// set bloom byte to old byte OR hash
-			b.bs[i] = b.bs[i] | h[i]
-		}
-	}
-	if b.size == 64 {
-		var h [64]byte = sha512.Sum512(bs)
-		for i := 0; i < b.size; i++ {
-			for i := 0; i < b.size; i++ {
-				// set bloom byte to old byte OR hash
-				b.bs[i] = b.bs[i] | h[i]
-			}
-		}
+	var h [64]byte = sha512.Sum512(bs)
+	for i := 0; i < b.len; i++ {
+		// set bloom byte to old byte OR hash
+		b.bs[i] = b.bs[i] | h[i]
 	}
 	b.n++
 	return b, nil
-}
-
-// adds string to bloom filter
-func (b *Bloom) PutStr(s string) (*Bloom, error) {
-	bs := []byte(s)
-	return b.PutBytes(bs)
-}
-
-// checks for membership of bytes element
-func (b *Bloom) ExistsBytes(bs []byte) (bool, float64) {
-	if b.size == 32 {
-		var h [32]byte = sha256.Sum256(bs)
-		for i := 0; i < b.size; i++ {
-			if (b.bs[i] | h[i]) != b.bs[i] {
-				// bloom OR hash changes bloom which means there are 1's present in hash not in bloom
-				return false, 1
-			}
-		}
-	}
-	if b.size == 64 {
-		var h [64]byte = sha512.Sum512(bs)
-		for i := 0; i < b.size; i++ {
-			if (b.bs[i] | h[i]) != b.bs[i] {
-				// bloom OR hash changes bloom which means there are 1's present in hash not in bloom
-				return false, 1
-			}
-		}
-	}
-	return true, b.Accuracy()
 }
 
 // checks for membership of string element
@@ -189,18 +138,30 @@ func (b *Bloom) ExistsStr(s string) (bool, float64) {
 	return b.ExistsBytes(bs)
 }
 
+// checks for membership of bytes element
+func (b *Bloom) ExistsBytes(bs []byte) (bool, float64) {
+	var h [64]byte = sha512.Sum512(bs)
+	for i := 0; i < b.len; i++ {
+		if (b.bs[i] | h[i]) != b.bs[i] {
+			// bloom OR hash changes bloom which means there are 1's present in hash not in bloom
+			return false, 1
+		}
+	}
+	return true, b.Accuracy()
+}
+
 // get false positive rate
 func (b *Bloom) Accuracy() float64 {
 	if b.n == 0 {
 		return 1
 	}
-	return falsePositiveRate(b.size, b.n)
+	return falsePositiveRate(b.len, b.n)
 }
 
 func (b *Bloom) String() string {
 	var buf strings.Builder
 
-	buf.WriteString(fmt.Sprintf("%d-bit bloom filter: %d entries", 8*b.size, b.n))
+	buf.WriteString(fmt.Sprintf("%d-bit bloom filter: %d entries", 8*b.len, b.n))
 	if b.cap != nil {
 		buf.WriteString(fmt.Sprintf(", max cap %d", *b.cap))
 	}
