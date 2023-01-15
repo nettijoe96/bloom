@@ -9,7 +9,7 @@ import (
 )
 
 type BigBloom struct {
-	// current number of entries
+	// current number of unique entries
 	n int
 
 	// bloom filter bytes
@@ -18,7 +18,7 @@ type BigBloom struct {
 	// number of bytes
 	len int
 
-	// optional, maximum number of entries allowed
+	// optional, maximum number of unique entries allowed
 	cap *int
 
 	// optional, the maximum allowed false positive rate until no more entries accepted
@@ -109,6 +109,11 @@ func (b *BigBloom) PutStr(s string) (*BigBloom, error) {
 
 // adds byte data to bloom filter
 func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
+	// if exists already just return filter and don't increase n
+	if exists, _ := b.ExistsBytes(bs); exists {
+		return b, nil
+	}
+	
 	if b.cap != nil && b.n == *b.cap{
 		return b, &CapacityError{cap: *b.cap}
 	}
@@ -142,7 +147,6 @@ func (b *BigBloom) ExistsStr(s string) (bool, float64) {
 	return b.ExistsBytes(bs)
 }
 
-
 // checks for membership of bytes element
 func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
 	var nonce int
@@ -173,7 +177,7 @@ func (b *BigBloom) Accuracy() float64 {
 func (b *BigBloom) String() string {
 	var buf strings.Builder
 
-	buf.WriteString(fmt.Sprintf("%d-bit bloom filter: %d entries", 8*b.len, b.n))
+	buf.WriteString(fmt.Sprintf("%d-bit bloom filter: %d unique entries", 8*b.len, b.n))
 	if b.cap != nil {
 		buf.WriteString(fmt.Sprintf(", max cap %d", *b.cap))
 	}
@@ -186,40 +190,3 @@ func (b *BigBloom) String() string {
 
 	return buf.String()
 }
-
-//
-// -------------------------------------
-//
-
-// func NewBigBloomCap(bits, cap int) *BigBloom {
-// 	bytes := int(math.Ceil(float64(bits)/8))
-// 	return &BigBloom{
-// 		n: 0,
-// 		bs: make([]byte, bytes),
-// 		bits: bits,
-// 		maxFalsePositiveRate: nil,  // don't care about accuracy unless specified
-// 		cap: &cap,        			// don't care about capacity unless specified
-// 	}
-// }
-
-// func NewBigBloomAcc(bits int, maxFalsePositiveRate float64) *BigBloom {
-// 	bytes := int(math.Ceil(float64(bits)/8))
-// 	return &BigBloom{
-// 		n: 0,
-// 		bs: make([]byte, bytes),
-// 		bits: bits,
-// 		maxFalsePositiveRate: nil,  // don't care about accuracy unless specified
-// 		cap: nil,        			// don't care about capacity unless specified
-// 	}
-// }
-
-// func NewBigBloomConstain(cap int, maxFalsePositiveRate float64) *BigBloom {
-// 	return &BigBloom{
-// 		n: 0,
-// 		bs: make([]byte, bits),
-// 		bits: bits,
-// 		maxFalsePositiveRate: nil,  // don't care about accuracy unless specified
-// 		cap: nil,        			// don't care about capacity unless specified
-// 	}
-// }
-

@@ -41,7 +41,9 @@ func TestBloomPutStr(t *testing.T) {
 	b.PutStr("test")
 	assert.Equal(t, 1, b.n)
 
-	// TODO: add test here if I choose to make n not increase when already exists on put
+	// make sure n stays the same after same insertion
+	b.PutStr("test")
+	assert.Equal(t, 1, b.n)
 }
 
 // TestExistsStr also tests ExistsBytes because ExistsStr calls ExistsBytes
@@ -104,9 +106,11 @@ func TestBlooomCapacityConstaint(t *testing.T) {
 		_, err := b.PutStr(strconv.Itoa(i))
 		assert.Nil(t, err)
 	}
-	// TODO: add test here if I choose to make n not increase when already exists on put
+	// test already added
+	_, err := b.PutStr(strconv.Itoa(0))
+	assert.Nil(t, err)
 	// should fail on 6th try
-	_, err := b.PutStr("fail")
+	_, err = b.PutStr("fail")
 	assert.IsType(t, err, &CapacityError{})
 }
 

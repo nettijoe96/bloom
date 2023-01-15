@@ -22,7 +22,7 @@ type Bloomer interface {
 }
 
 type Bloom struct {
-	// current number of entries
+	// current number of unique entries. 
 	n int
 
 	// bloom filter bytes
@@ -31,7 +31,7 @@ type Bloom struct {
 	// always set to 64
 	len int
 
-	// optional, maximum number of entries allowed
+	// optional, maximum number of unique entries allowed
 	cap *int
 
 	// optional, the maximum allowed false positive rate until no more entries accepted
@@ -73,17 +73,17 @@ func NewBloom() *Bloom {
 func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) {
 	b := NewBloom()
 
-	if maxFalsePositiveRate != nil {
-		if *maxFalsePositiveRate <= 0 {
-			return nil, errors.New("false positive rate must be greater than 0")
-		}
-		b.maxFalsePositiveRate = maxFalsePositiveRate
-	}
 	if cap != nil {
 		if *cap < 1 {
 			return nil, errors.New("capacity cannot be less than 1")
 		}
 		b.cap = cap
+	}
+	if maxFalsePositiveRate != nil {
+		if *maxFalsePositiveRate <= 0 {
+			return nil, errors.New("false positive rate must be greater than 0")
+		}
+		b.maxFalsePositiveRate = maxFalsePositiveRate
 	}
 	if cap == nil || maxFalsePositiveRate == nil {
 		// do not need to check for compatibility of constraints.
@@ -113,6 +113,11 @@ func (b *Bloom) PutStr(s string) (*Bloom, error) {
 
 // adds byte data to bloom filter
 func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
+	// if exists already just return filter and don't increase n
+	if exists, _ := b.ExistsBytes(bs); exists {
+		return b, nil
+	}
+
 	if b.cap != nil && b.n == *b.cap{
 		return b, &CapacityError{cap: *b.cap}
 	}
@@ -161,7 +166,7 @@ func (b *Bloom) Accuracy() float64 {
 func (b *Bloom) String() string {
 	var buf strings.Builder
 
-	buf.WriteString(fmt.Sprintf("%d-bit bloom filter: %d entries", 8*b.len, b.n))
+	buf.WriteString(fmt.Sprintf("%d-bit bloom filter: %d unique entries", 8*b.len, b.n))
 	if b.cap != nil {
 		buf.WriteString(fmt.Sprintf(", max cap %d", *b.cap))
 	}
@@ -180,7 +185,7 @@ func (b *Bloom) String() string {
 //
 
 func falsePositiveRate(bytes, n int) float64 {
-	// equation: 1-((1 - (1/m))^n) where m is bits and n is entries. k variable (# hash functions) not implemented.
+	// equation: 1-((1 - (1/m))^n) where m is bits and n is unique entries. k variable (# hash functions) not implemented.
 	// math here: https://brilliant.org/wiki/bloom-filter/
 	base := 1 - float64(1)/float64(bytes*8)
 	falsePositiveRate := 1 - math.Pow(base, float64(n))
