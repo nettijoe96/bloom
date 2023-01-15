@@ -5,15 +5,22 @@
 bloom := NewBloom()
 bloom.PutStr("hello")
 exists, acc := bloom.ExistsStr("hello")
-fmt.Printf("'hello' exists: %t, chance false positive: %f\n", exists, acc)
+fmt.Printf("'hello' exists: %t, accuracy of result: %f\n", exists, acc)
 ```
+## Bloomer interface
+commonly used methods:
+
+### PutStr(s string) (*Bloom, error)
+Inserts string element into bloom filter. Returns if a constraint is violated.
+### ExistsStr(s string) (bool, float64)
+Checks for existance of a string in a bloom filter. Returns boolean and false positive rate.
 ## Bloom type
 
 ### NewBloom()
 constructs 512-bit bloom filter with no constaints
 
 ### NewBloomConstrain(cap *int, maxFalsePositiveRate *float64)
-constructs 512-bit bloom filter with constraints. If cap is provided, bloom filter will not allow for more that number of unique elements in bloom filter. If maxFalsePositiveRate is provided then the false positive rate of the filter will not be allowed to increase beyond that amount. 
+constructs 512-bit bloom filter with constraints. If cap is provided, bloom filter will not allow for more than that amount of unique elements. If maxFalsePositiveRate is provided then the false positive rate of the filter will not be allowed to increase beyond that amount. 
 
 ## BigBloom type
 
@@ -21,11 +28,11 @@ constructs 512-bit bloom filter with constraints. If cap is provided, bloom filt
 constructs len-byte bloom filter with no constraints.
 
 ### NewBigBloomAlloc(cap int, maxFalsePositiveRate float64)
-constructs bloom filter with the minimum length to both satisify constraints. 
+constructs bloom filter with the minimum length to satisify both constraints. 
 
 ### NewBigBloomConstrain(len int, cap *int, maxFalsePositiveRate *float64)
-Equivalent to NewBloomConstain. Constructs 512-bit bloom filter with constraints. If cap is provided, bloom filter will not allow for more that number of unique elements in bloom filter. If maxFalsePositiveRate is provided then the false positive rate of the filter will not be allowed to increase beyond that amount.
+Equivalent to NewBloomConstain. Constructs len-byte bloom filter with constraints. If cap is provided, bloom filter will not allow for more than that amount of unique elements. If maxFalsePositiveRate is provided then the false positive rate of the filter will not be allowed to increase beyond that amount.
 
 ## future improvements needed
-#### - Applying many hashes (k) according to formula k=ln(2)*(m/n)
-#### - Parallelism in BigBloom. Each hash can be calculated and applied to filter in it's own go routine.
+1. Applying many hashes (k) according to formula k=ln(2)*(m/n)
+2. Parallelism in BigBloom. Each hash can be calculated and applied to filter in it's own go routine.
