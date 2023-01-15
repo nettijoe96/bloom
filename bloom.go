@@ -184,10 +184,10 @@ func (b *Bloom) String() string {
 // helpers
 //
 
-func falsePositiveRate(bytes, n int) float64 {
+func falsePositiveRate(len, n int) float64 {
 	// equation: 1-((1 - (1/m))^n) where m is bits and n is unique entries. k variable (# hash functions) not implemented.
 	// math here: https://brilliant.org/wiki/bloom-filter/
-	base := 1 - float64(1)/float64(bytes*8)
+	base := 1 - float64(1)/float64(len*8)
 	falsePositiveRate := 1 - math.Pow(base, float64(n))
 	return falsePositiveRate
 }

@@ -29,11 +29,11 @@ type BigBloom struct {
 // Constructors
 //
 
-func NewBigBloom(bytes int) *BigBloom {
+func NewBigBloom(len int) *BigBloom {
 	return &BigBloom{
 		n: 0,
-		bs: make([]byte, bytes),
-		len: bytes,
+		bs: make([]byte, len),
+		len: len,
 		maxFalsePositiveRate: nil,
 		cap: nil,
 	}
@@ -52,12 +52,12 @@ func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) 
 	// see math https://brilliant.org/wiki/bloom-filter/
 	bits := -1*(float64(cap) / math.Log(1-maxFalsePositiveRate))
 	// take ceiling, rounding down could cause the constaint to be reached before max capacity
-	bytes := int(math.Ceil(bits/8))
+	len := int(math.Ceil(bits/8))
 
 	return &BigBloom{
 		n: 0,
-		bs: make([]byte, bytes),
-		len: bytes,
+		bs: make([]byte, len),
+		len: len,
 		maxFalsePositiveRate: &maxFalsePositiveRate,
 		cap: &cap,
 	}, nil
@@ -67,8 +67,8 @@ func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) 
 // cap: max number of entries
 // min_accuracy: max allowed
 // ex: if maxFalsePositiveRate is 0.1 then 10% chance of false positive when capacity is full
-func NewBigBloomConstrain(bytes int, cap *int, maxFalsePositiveRate *float64) (*BigBloom, error) {
-	b := NewBigBloom(bytes)
+func NewBigBloomConstrain(len int, cap *int, maxFalsePositiveRate *float64) (*BigBloom, error) {
+	b := NewBigBloom(len)
 
 	if cap != nil {
 		if *cap < 1 {
@@ -88,7 +88,7 @@ func NewBigBloomConstrain(bytes int, cap *int, maxFalsePositiveRate *float64) (*
 	}
 
 	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
-	calcMaxFalsePositiveRate := falsePositiveRate(bytes, *cap)
+	calcMaxFalsePositiveRate := falsePositiveRate(len, *cap)
 	if calcMaxFalsePositiveRate > *maxFalsePositiveRate  {
 		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
 		return nil, errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")

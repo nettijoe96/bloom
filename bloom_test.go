@@ -132,29 +132,29 @@ func TestBloomAccuracy(t *testing.T) {
 func TestFalsePositiveRate(t *testing.T) {
 
 	type falsePositiveTest struct {
-		bytes int
+		len int
 		n int
 		expected float64
 	}
 
 	tests := []falsePositiveTest{
 		{
-			bytes: 32,
+			len: 32,
 			n: 1,
 			expected: 0.00390625, // from Wolfram alpha
 		},
 		{
-			bytes: 32,
+			len: 32,
 			n: 100,
 			expected: 0.3238835348904526709877393077971628097768978560726550437785281290, // from Wolfram alpha
 		},
 		{
-			bytes: 64,
+			len: 64,
 			n: 1,
 			expected: 0.001953125, // from Wolfram alpha
 		},
 		{
-			bytes: 64,
+			len: 64,
 			n: 100,
 			expected: 0.1775795214086141608493458302357950078335925130130317388097481965, // from Wolfram alpha
 		},
@@ -162,7 +162,7 @@ func TestFalsePositiveRate(t *testing.T) {
 
 	unit := 0.000000000000001
 	for _, test := range tests {
-		got := falsePositiveRate(test.bytes, test.n)
+		got := falsePositiveRate(test.len, test.n)
 		got = round(got, unit)
 		expected := round(test.expected, unit)
 		assert.Equal(t, expected, got)
