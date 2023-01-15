@@ -1,6 +1,7 @@
 package bloom
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -167,6 +168,29 @@ func TestFalsePositiveRate(t *testing.T) {
 		assert.Equal(t, expected, got)
 	}
 
+}
+
+// benchmark for PutStr
+func BenchmarkBloomPutStr(b *testing.B) {
+	bloom := NewBloom()
+	b.Run(fmt.Sprintf("len_%d_bytes", 64), func(b *testing.B) {
+		for j := 0; j < 100; j++ {
+			bloom.PutStr(strconv.Itoa(j))
+		}
+	})
+}
+
+// benchmark for exists for ExistsStr
+func BenchmarkBloomExistsStr(b *testing.B) {
+	bloom := NewBloom()
+	for j := 0; j < 100; j++ {
+		bloom.PutStr(strconv.Itoa(j))
+	}
+	b.Run(fmt.Sprintf("len_%d_bytes", 64), func(b *testing.B) {
+		for j := 0; j < 100; j++ {
+			bloom.ExistsStr(strconv.Itoa(j))
+		}
+	})
 }
 
 //

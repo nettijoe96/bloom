@@ -1,6 +1,7 @@
 package bloom
 
 import (
+	"fmt"
 	"testing"
 
 	"strconv"
@@ -189,3 +190,31 @@ func TestBigBloomAccuracy(t *testing.T) {
 	assert.Equal(t, float64(1), b.Accuracy())
 	// rest of accuracy tested in TestFalsePositiveRate
 }
+
+// benchmark for increasing bloom filter len
+func BenchmarkBigBloomPutStr(b *testing.B) {
+	for i := 512; i < 10000; i+=512 {
+		bloom := NewBigBloom(i)
+		b.Run(fmt.Sprintf("len_%d_bytes", i), func(b *testing.B) {
+			for j := 0; j < 100; j++ {
+				bloom.PutStr(strconv.Itoa(j))
+			}
+		})
+	}
+}
+
+// benchmark for exists for increasing bloom filter len
+func BenchmarkBigBloomExistsStr(b *testing.B) {
+	for i := 512; i < 10000; i+=512 {
+		bloom := NewBigBloom(i)
+		for j := 0; j < 100; j++ {
+			bloom.PutStr(strconv.Itoa(j))
+		}
+		b.Run(fmt.Sprintf("len_%d_bytes", i), func(b *testing.B) {
+			for j := 0; j < 100; j++ {
+				bloom.ExistsStr(strconv.Itoa(j))
+			}
+		})
+	}
+}
+
