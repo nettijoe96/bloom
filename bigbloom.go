@@ -127,12 +127,12 @@ func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 		}
 	}
 
-	// concatenate a nonce that increments every 256 bits in order to enlargen the hash
+	// concatenate a nonce that increments every 512 bits in order to enlargen the hash
 	var nonce int
 	var h [64]byte
 	for i := 0; i < b.len; i++ {
-		if i%32 == 0 {
-			// new hash unique has to constructed after 256 bits
+		if i%64 == 0 {
+			// new hash unique has to constructed after 512 bits
 			bsNonce := append(bs, byte(nonce))
 			h = sha512.Sum512(bsNonce)
 			nonce++
@@ -155,8 +155,8 @@ func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
 	var nonce int
 	var h [64]byte
 	for i := 0; i < b.len; i++ {
-		if i%32 == 0 {
-			// new hash unique has to constructed after 256 bits
+		if i%64 == 0 {
+			// new hash unique has to constructed after 512 bits
 			bsNonce := append(bs, byte(nonce))
 			h = sha512.Sum512(bsNonce)
 			nonce++
