@@ -21,6 +21,7 @@ type Bloomer interface {
 	Accuracy() float64
 }
 
+// Bloom type is a 512-bit bloom filter that uses a single SHA512 hash.
 type Bloom struct {
 	// current number of unique entries.
 	n int
@@ -58,7 +59,7 @@ func (e *AccuracyError) Error() string {
 // Bloom type constructors
 //
 
-// makes a new bloom of 512 bits
+// Constructs 512-bit bloom filter with no constaints
 func NewBloom() *Bloom {
 	return &Bloom{
 		n:                    0,
@@ -69,8 +70,8 @@ func NewBloom() *Bloom {
 	}
 }
 
-// cap: max number of entries
-// min_accuracy: max allowed
+// Constructs 512-bit bloom filter with constraints. If cap is provided, bloom filter will not allow for more than that amount of unique elements.
+// If maxFalsePositiveRate is provided then the false positive rate of the filter will not be allowed to increase beyond that amount
 // ex: if maxFalsePositiveRate is 0.1 then 10% chance of false positive when capacity is full
 func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) {
 	b := NewBloom()
@@ -106,13 +107,13 @@ func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) 
 // Methods
 //
 
-// adds string to bloom filter
+// Inserts string element into bloom filter. Returns an error if a constraint is violated.
 func (b *Bloom) PutStr(s string) (*Bloom, error) {
 	bs := []byte(s)
 	return b.PutBytes(bs)
 }
 
-// adds byte data to bloom filter
+// Inserts bytes element into bloom filter. Returns an error if a constraint is violated.
 func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 	// if exists already just return filter and don't increase n
 	if exists, _ := b.ExistsBytes(bs); exists {
@@ -138,13 +139,13 @@ func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 	return b, nil
 }
 
-// checks for membership of string element
+// Checks for existance of a string in a bloom filter. Returns boolean and false positive rate.
 func (b *Bloom) ExistsStr(s string) (bool, float64) {
 	bs := []byte(s)
 	return b.ExistsBytes(bs)
 }
 
-// checks for membership of bytes element
+// Checks for existance of bytes element in a bloom filter. Returns boolean and false positive rate.
 func (b *Bloom) ExistsBytes(bs []byte) (bool, float64) {
 	var h [64]byte = sha512.Sum512(bs)
 	for i := 0; i < b.len; i++ {
@@ -156,7 +157,7 @@ func (b *Bloom) ExistsBytes(bs []byte) (bool, float64) {
 	return true, b.Accuracy()
 }
 
-// get false positive rate
+// Get false positive rate
 func (b *Bloom) Accuracy() float64 {
 	if b.n == 0 {
 		return 1

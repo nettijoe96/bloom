@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// BigBloom is a bloom filter with a variable length. It uses SHA512 hashes with a nonce.
 type BigBloom struct {
 	// current number of unique entries
 	n int
@@ -29,6 +30,7 @@ type BigBloom struct {
 // Constructors
 //
 
+// Constructs len-byte bloom filter with no constraints.
 func NewBigBloom(len int) *BigBloom {
 	return &BigBloom{
 		n:                    0,
@@ -39,7 +41,7 @@ func NewBigBloom(len int) *BigBloom {
 	}
 }
 
-// constuctor that sets the minimum bloom filter len that fulfills constaints
+// Constructs bloom filter with the minimum length to satisify both constraints.
 func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) {
 	if cap < 1 {
 		return nil, errors.New("capacity cannot be less than 1")
@@ -64,8 +66,9 @@ func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) 
 
 }
 
-// cap: max number of entries
-// min_accuracy: max allowed
+// Equivalent to NewBloomConstain. Constructs len-byte bloom filter with constraints.
+// If cap is provided, bloom filter will not allow for more than that amount of unique elements.
+// If maxFalsePositiveRate is provided then the false positive rate of the filter will not be allowed to increase beyond that amount.
 // ex: if maxFalsePositiveRate is 0.1 then 10% chance of false positive when capacity is full
 func NewBigBloomConstrain(len int, cap *int, maxFalsePositiveRate *float64) (*BigBloom, error) {
 	b := NewBigBloom(len)
@@ -101,13 +104,13 @@ func NewBigBloomConstrain(len int, cap *int, maxFalsePositiveRate *float64) (*Bi
 // Methods
 //
 
-// adds string to bloom filter
+// Inserts string element into bloom filter. Returns an error if a constraint is violated.
 func (b *BigBloom) PutStr(s string) (*BigBloom, error) {
 	bs := []byte(s)
 	return b.PutBytes(bs)
 }
 
-// adds byte data to bloom filter
+// Inserts bytes element into bloom filter. Returns an error if a constraint is violated.
 func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 	// if exists already just return filter and don't increase n
 	if exists, _ := b.ExistsBytes(bs); exists {
@@ -141,13 +144,13 @@ func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 	return b, nil
 }
 
-// checks for membership of string element
+// Checks for existance of a string in a bloom filter. Returns boolean and false positive rate.
 func (b *BigBloom) ExistsStr(s string) (bool, float64) {
 	bs := []byte(s)
 	return b.ExistsBytes(bs)
 }
 
-// checks for membership of bytes element
+// Checks for existance of bytes element in a bloom filter. Returns boolean and false positive rate.
 func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
 	var nonce int
 	var h [64]byte
@@ -166,7 +169,7 @@ func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
 	return true, b.Accuracy()
 }
 
-// get false positive rate
+// Get false positive rate
 func (b *BigBloom) Accuracy() float64 {
 	if b.n == 0 {
 		return 1
