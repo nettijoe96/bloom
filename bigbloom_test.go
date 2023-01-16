@@ -80,6 +80,27 @@ func TestBigBloomPutStr(t *testing.T) {
 	// make sure n stays the same after same insertion
 	b.PutStr("test")
 	assert.Equal(t, 1, b.n)
+
+	// makes sure each hash is distinct
+	// this verifies that the nonce is increasing
+	b = NewBigBloom(256) // four hashes of 64 bytes
+	// add one entry
+	b.PutStr("test")
+	// make sure each block of 64 is not 0 and is different from prior blocks
+	hashes := make([][64]byte, 4)
+	var j int
+	for i := 0; i < 256; i++ {
+		if i != 0 && i%64 == 0 {
+			j++
+		}
+		hashes[j][i%64] = b.bs[i]
+	}
+	for i := 0; i < len(hashes); i++ {
+		for j := i + 1; j < len(hashes); j++ {
+			// make sure each 64 byte sequence is unique
+			assert.False(t, compare(hashes[i][:], hashes[j][:]))
+		}
+	}
 }
 
 // TestExistsStr also tests ExistsBytes because ExistsStr calls ExistsBytes
@@ -216,4 +237,21 @@ func BenchmarkBigBloomExistsStr(b *testing.B) {
 			}
 		})
 	}
+}
+
+//
+// helpers
+//
+
+func compare(bs1, bs2 []byte) bool {
+	if len(bs1) != len(bs2) {
+		return false
+	}
+
+	for i := 0; i < len(bs1); i++ {
+		if bs1[i] != bs2[i] {
+			return false
+		}
+	}
+	return true
 }
