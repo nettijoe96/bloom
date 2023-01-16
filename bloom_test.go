@@ -51,36 +51,36 @@ func TestBloomPutStr(t *testing.T) {
 func TestBloomExistsStr(t *testing.T) {
 
 	type existTest struct {
-		entry string
+		entry    string
 		expected bool
 	}
 
 	validEntries := []existTest{
 		{
-			entry: "exists1",
+			entry:    "exists1",
 			expected: true,
 		},
 		{
-			entry: "exists2",
+			entry:    "exists2",
 			expected: true,
 		},
 		{
-			entry: "exists3",
+			entry:    "exists3",
 			expected: true,
 		},
 	}
 
 	invalidEntries := []existTest{
 		{
-			entry: "not-exists1",
+			entry:    "not-exists1",
 			expected: false,
 		},
 		{
-			entry: "not-exists2",
+			entry:    "not-exists2",
 			expected: false,
 		},
 		{
-			entry: "not-exists3",
+			entry:    "not-exists3",
 			expected: false,
 		},
 	}
@@ -132,30 +132,30 @@ func TestBloomAccuracy(t *testing.T) {
 func TestFalsePositiveRate(t *testing.T) {
 
 	type falsePositiveTest struct {
-		len int
-		n int
+		len      int
+		n        int
 		expected float64
 	}
 
 	tests := []falsePositiveTest{
 		{
-			len: 32,
-			n: 1,
+			len:      32,
+			n:        1,
 			expected: 0.00390625, // from Wolfram alpha
 		},
 		{
-			len: 32,
-			n: 100,
+			len:      32,
+			n:        100,
 			expected: 0.3238835348904526709877393077971628097768978560726550437785281290, // from Wolfram alpha
 		},
 		{
-			len: 64,
-			n: 1,
+			len:      64,
+			n:        1,
 			expected: 0.001953125, // from Wolfram alpha
 		},
 		{
-			len: 64,
-			n: 100,
+			len:      64,
+			n:        100,
 			expected: 0.1775795214086141608493458302357950078335925130130317388097481965, // from Wolfram alpha
 		},
 	}
@@ -198,5 +198,5 @@ func BenchmarkBloomExistsStr(b *testing.B) {
 //
 
 func round(x, unit float64) float64 {
-    return math.Round(x/unit) * unit
+	return math.Round(x/unit) * unit
 }

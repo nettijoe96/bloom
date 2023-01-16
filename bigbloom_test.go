@@ -21,20 +21,20 @@ func TestNewBigBloomAlloc(t *testing.T) {
 	assert.EqualError(t, err, "false positive rate must be greater than 0")
 
 	type allocTest struct {
-		cap int
-		acc float64
+		cap         int
+		acc         float64
 		expectedLen int
 	}
 
 	tests := []allocTest{
 		{
-			cap: 10,
-			acc: 0.038382958383573,
+			cap:         10,
+			acc:         0.038382958383573,
 			expectedLen: 32, // 256 bits
 		},
 		{
-			cap: 1000,
-			acc: 0.01,
+			cap:         1000,
+			acc:         0.01,
 			expectedLen: 12438, // wolfram alpha
 		},
 	}
@@ -86,36 +86,36 @@ func TestBigBloomPutStr(t *testing.T) {
 func TestBigBloomExistsStr(t *testing.T) {
 
 	type existTest struct {
-		entry string
+		entry    string
 		expected bool
 	}
 
 	validEntries := []existTest{
 		{
-			entry: "exists1",
+			entry:    "exists1",
 			expected: true,
 		},
 		{
-			entry: "exists2",
+			entry:    "exists2",
 			expected: true,
 		},
 		{
-			entry: "exists3",
+			entry:    "exists3",
 			expected: true,
 		},
 	}
 
 	invalidEntries := []existTest{
 		{
-			entry: "not-exists1",
+			entry:    "not-exists1",
 			expected: false,
 		},
 		{
-			entry: "not-exists2",
+			entry:    "not-exists2",
 			expected: false,
 		},
 		{
-			entry: "not-exists3",
+			entry:    "not-exists3",
 			expected: false,
 		},
 	}
@@ -193,7 +193,7 @@ func TestBigBloomAccuracy(t *testing.T) {
 
 // benchmark for increasing bloom filter len
 func BenchmarkBigBloomPutStr(b *testing.B) {
-	for i := 512; i < 10000; i+=512 {
+	for i := 512; i < 10000; i += 512 {
 		bloom := NewBigBloom(i)
 		b.Run(fmt.Sprintf("len_%d_bytes", i), func(b *testing.B) {
 			for j := 0; j < 100; j++ {
@@ -205,7 +205,7 @@ func BenchmarkBigBloomPutStr(b *testing.B) {
 
 // benchmark for exists for increasing bloom filter len
 func BenchmarkBigBloomExistsStr(b *testing.B) {
-	for i := 512; i < 10000; i+=512 {
+	for i := 512; i < 10000; i += 512 {
 		bloom := NewBigBloom(i)
 		for j := 0; j < 100; j++ {
 			bloom.PutStr(strconv.Itoa(j))
@@ -217,4 +217,3 @@ func BenchmarkBigBloomExistsStr(b *testing.B) {
 		})
 	}
 }
-

@@ -31,11 +31,11 @@ type BigBloom struct {
 
 func NewBigBloom(len int) *BigBloom {
 	return &BigBloom{
-		n: 0,
-		bs: make([]byte, len),
-		len: len,
+		n:                    0,
+		bs:                   make([]byte, len),
+		len:                  len,
 		maxFalsePositiveRate: nil,
-		cap: nil,
+		cap:                  nil,
 	}
 }
 
@@ -50,16 +50,16 @@ func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) 
 
 	// solving for m in equation: acc = 1 - e^(-n/m)
 	// see math https://brilliant.org/wiki/bloom-filter/
-	bits := -1*(float64(cap) / math.Log(1-maxFalsePositiveRate))
+	bits := -1 * (float64(cap) / math.Log(1-maxFalsePositiveRate))
 	// take ceiling, rounding down could cause the constaint to be reached before max capacity
-	len := int(math.Ceil(bits/8))
+	len := int(math.Ceil(bits / 8))
 
 	return &BigBloom{
-		n: 0,
-		bs: make([]byte, len),
-		len: len,
+		n:                    0,
+		bs:                   make([]byte, len),
+		len:                  len,
 		maxFalsePositiveRate: &maxFalsePositiveRate,
-		cap: &cap,
+		cap:                  &cap,
 	}, nil
 
 }
@@ -89,7 +89,7 @@ func NewBigBloomConstrain(len int, cap *int, maxFalsePositiveRate *float64) (*Bi
 
 	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
 	calcMaxFalsePositiveRate := falsePositiveRate(len, *cap)
-	if calcMaxFalsePositiveRate > *maxFalsePositiveRate  {
+	if calcMaxFalsePositiveRate > *maxFalsePositiveRate {
 		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
 		return nil, errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
 	}
@@ -113,13 +113,13 @@ func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 	if exists, _ := b.ExistsBytes(bs); exists {
 		return b, nil
 	}
-	
-	if b.cap != nil && b.n == *b.cap{
+
+	if b.cap != nil && b.n == *b.cap {
 		return b, &CapacityError{cap: *b.cap}
 	}
 
 	if b.maxFalsePositiveRate != nil {
-		if falsePositiveRate(b.len, b.n + 1) > *b.maxFalsePositiveRate {
+		if falsePositiveRate(b.len, b.n+1) > *b.maxFalsePositiveRate {
 			return b, &AccuracyError{acc: *b.maxFalsePositiveRate}
 		}
 	}
@@ -128,14 +128,14 @@ func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 	var nonce int
 	var h [64]byte
 	for i := 0; i < b.len; i++ {
-		if i % 32 == 0 {
+		if i%32 == 0 {
 			// new hash unique has to constructed after 256 bits
 			bsNonce := append(bs, byte(nonce))
 			h = sha512.Sum512(bsNonce)
 			nonce++
 		}
 		// set bloom byte to old byte OR hash
-		b.bs[i] = b.bs[i] | h[i % 64]
+		b.bs[i] = b.bs[i] | h[i%64]
 	}
 	b.n++
 	return b, nil
@@ -152,13 +152,13 @@ func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
 	var nonce int
 	var h [64]byte
 	for i := 0; i < b.len; i++ {
-		if i % 32 == 0 {
+		if i%32 == 0 {
 			// new hash unique has to constructed after 256 bits
 			bsNonce := append(bs, byte(nonce))
 			h = sha512.Sum512(bsNonce)
 			nonce++
 		}
-		if (b.bs[i] | h[i % 64]) != b.bs[i] {
+		if (b.bs[i] | h[i%64]) != b.bs[i] {
 			// bloom OR hash changes bloom which means there are 1's present in hash not in bloom
 			return false, 1
 		}

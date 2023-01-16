@@ -10,19 +10,19 @@ import (
 
 type Bloomer interface {
 	// put in bloom: true if successful
-	PutStr(string) (bool)
-	PutBytes([]byte) (bool)
+	PutStr(string) bool
+	PutBytes([]byte) bool
 
 	// checks for existance: returns true if exists and float64 for false positive rate
-	ExistsStr(string) (bool, float64);
-	ExistsBytes([]byte) (bool, float64);
+	ExistsStr(string) (bool, float64)
+	ExistsBytes([]byte) (bool, float64)
 
 	// checks accuracy: returns current false positive rate
-	Accuracy() float64;
+	Accuracy() float64
 }
 
 type Bloom struct {
-	// current number of unique entries. 
+	// current number of unique entries.
 	n int
 
 	// bloom filter bytes
@@ -38,16 +38,18 @@ type Bloom struct {
 	maxFalsePositiveRate *float64
 }
 
-type CapacityError struct{
+type CapacityError struct {
 	cap int
 }
+
 func (e *CapacityError) Error() string {
 	return fmt.Sprintf("failed to add entry: bloom filter at max capacity %d", e.cap)
 }
 
-type AccuracyError struct{
+type AccuracyError struct {
 	acc float64
 }
+
 func (e *AccuracyError) Error() string {
 	return fmt.Sprintf("failed to add entry: bloom filter constrained by max false positive rate %f", e.acc)
 }
@@ -59,11 +61,11 @@ func (e *AccuracyError) Error() string {
 // makes a new bloom of 512 bits
 func NewBloom() *Bloom {
 	return &Bloom{
-		n: 0,
-		bs: [64]byte{},
-		len: 64,
-		maxFalsePositiveRate: nil,  // don't care about accuracy unless specified
-		cap: nil,        			// don't care about capacity unless specified
+		n:                    0,
+		bs:                   [64]byte{},
+		len:                  64,
+		maxFalsePositiveRate: nil, // don't care about accuracy unless specified
+		cap:                  nil, // don't care about capacity unless specified
 	}
 }
 
@@ -92,7 +94,7 @@ func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) 
 
 	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
 	calcMaxFalsePositiveRate := falsePositiveRate(b.len, *cap)
-	if calcMaxFalsePositiveRate > *maxFalsePositiveRate  {
+	if calcMaxFalsePositiveRate > *maxFalsePositiveRate {
 		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
 		return nil, errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
 	}
@@ -110,7 +112,6 @@ func (b *Bloom) PutStr(s string) (*Bloom, error) {
 	return b.PutBytes(bs)
 }
 
-
 // adds byte data to bloom filter
 func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 	// if exists already just return filter and don't increase n
@@ -118,12 +119,12 @@ func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 		return b, nil
 	}
 
-	if b.cap != nil && b.n == *b.cap{
+	if b.cap != nil && b.n == *b.cap {
 		return b, &CapacityError{cap: *b.cap}
 	}
 
 	if b.maxFalsePositiveRate != nil {
-		if falsePositiveRate(b.len, b.n + 1) > *b.maxFalsePositiveRate {
+		if falsePositiveRate(b.len, b.n+1) > *b.maxFalsePositiveRate {
 			return b, &AccuracyError{acc: *b.maxFalsePositiveRate}
 		}
 	}
