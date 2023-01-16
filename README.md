@@ -23,6 +23,6 @@ func main() {
 ```
 
 ## Future Improvements Needed
-1. Applying many hashes $k$ according to formula $k=\text{ln}(2)\times(\frac{m}{n})$
+1. Apply $k$ hashes according to formula $k=\text{ln}(2)\times(\frac{m}{n})$
 2. Parallelism in BigBloom. Each hash can be calculated and applied to filter in it's own go routine.
 3. Possibly merge Bloom and BigBloom into one type
