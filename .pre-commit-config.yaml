@@ -16,8 +16,7 @@ repos:
           - "@commitlint/config-conventional"
           - "@commitlint/ensure"
           - "commitlint-plugin-function-rules"
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: "v2.2.1"
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: master
     hooks:
-      - id: prettier
-        language: node
+      - id: go-fmt
