@@ -26,16 +26,17 @@ func TestNewBigBloomAlloc(t *testing.T) {
 		expectedLen int
 	}
 
+	// wolfram alpha: https://www.wolframalpha.com/input?i2d=true&i=Power%5B%5C%2840%291-Power%5B%5C%2840%291%E2%88%92%5C%2840%29Divide%5B1%2C4096%5D%5C%2841%29%5C%2841%29%2C3000%5D%5C%2841%29%2C3%5D
 	tests := []allocTest{
 		{
 			cap:         10,
-			acc:         0.038382958383573,
+			acc:         0.0013597239492769301702394684205393411304012623906373231471869292,
 			expectedLen: 32, // 256 bits
 		},
 		{
 			cap:         1000,
-			acc:         0.01,
-			expectedLen: 12438, // wolfram alpha
+			acc:         0.1400406877800123403129581978899597802443405570160297883718149039,
+			expectedLen: 512, // 512 bytes
 		},
 	}
 

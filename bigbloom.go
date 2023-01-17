@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// BigBloom is a bloom filter with a variable length. It uses SHA512 hashes with a nonce.
+// BigBloom is a bloom filter with a variable length. It uses a SHA512 hash
 type BigBloom struct {
 	// current number of unique entries
 	n int
@@ -38,11 +38,15 @@ type BigBloom struct {
 // Constructors
 //
 
+var (
+	k int = 3 // TODO make k = ln(2) * (m/n) where possible
+)
+
 // Constructs len-byte bloom filter with no constraints.
 func NewBigBloom(len int) *BigBloom {
 	return &BigBloom{
 		n:                    0,
-		k:                    3,
+		k:                    k,
 		bs:                   make([]byte, len),
 		len:                  len,
 		maxFalsePositiveRate: nil,
@@ -60,15 +64,17 @@ func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) 
 		return nil, errors.New("false positive rate must be greater than 0")
 	}
 
-	// solving for m in equation: acc = 1 - e^(-n/m)
+	// solving for m in equation: acc = ( 1 - e^(-kn/m) )^k
+	// m = (k * n) / ( -1 * (n / ln( 1-(acc)^1/k ) ) )
 	// see math https://brilliant.org/wiki/bloom-filter/
-	bits := -1 * (float64(cap) / math.Log(1-maxFalsePositiveRate))
+	rootAcc := math.Pow(maxFalsePositiveRate, float64(1)/float64(k))
+	bits := -1 * (float64(k*cap) / math.Log(1-rootAcc))
 	// take ceiling, rounding down could cause the constaint to be reached before max capacity
 	len := int(math.Ceil(bits / 8))
 
 	return &BigBloom{
 		n:                    0,
-		k:                    3,
+		k:                    k,
 		bs:                   make([]byte, len),
 		len:                  len,
 		maxFalsePositiveRate: &maxFalsePositiveRate,
@@ -103,7 +109,7 @@ func NewBigBloomConstrain(len int, cap *int, maxFalsePositiveRate *float64) (*Bi
 	}
 
 	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
-	calcMaxFalsePositiveRate := falsePositiveRate(len, *cap)
+	calcMaxFalsePositiveRate := falsePositiveRate(len, *cap, b.k)
 	if calcMaxFalsePositiveRate > *maxFalsePositiveRate {
 		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
 		return nil, errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
@@ -149,7 +155,7 @@ func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 	}
 
 	if b.maxFalsePositiveRate != nil {
-		if falsePositiveRate(b.len, b.n+1) > *b.maxFalsePositiveRate {
+		if falsePositiveRate(b.len, b.n+1, b.k) > *b.maxFalsePositiveRate {
 			return b, &AccuracyError{acc: *b.maxFalsePositiveRate}
 		}
 	}
@@ -214,7 +220,7 @@ func (b *BigBloom) Accuracy() float64 {
 	if b.n == 0 {
 		return 1
 	}
-	return falsePositiveRate(b.len, b.n)
+	return falsePositiveRate(b.len, b.n, b.k)
 }
 
 func (b *BigBloom) String() string {

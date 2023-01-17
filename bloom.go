@@ -100,7 +100,7 @@ func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) 
 	}
 
 	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
-	calcMaxFalsePositiveRate := falsePositiveRate(b.len, *cap)
+	calcMaxFalsePositiveRate := falsePositiveRate(b.len, *cap, b.k)
 	if calcMaxFalsePositiveRate > *maxFalsePositiveRate {
 		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
 		return nil, errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
@@ -131,7 +131,7 @@ func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 	}
 
 	if b.maxFalsePositiveRate != nil {
-		if falsePositiveRate(b.len, b.n+1) > *b.maxFalsePositiveRate {
+		if falsePositiveRate(b.len, b.n+1, b.k) > *b.maxFalsePositiveRate {
 			return b, &AccuracyError{acc: *b.maxFalsePositiveRate}
 		}
 	}
@@ -188,7 +188,7 @@ func (b *Bloom) Accuracy() float64 {
 	if b.n == 0 {
 		return 1
 	}
-	return falsePositiveRate(b.len, b.n)
+	return falsePositiveRate(b.len, b.n, b.k)
 }
 
 func (b *Bloom) String() string {
@@ -217,10 +217,12 @@ func (b *Bloom) Hex() string {
 // helpers
 //
 
-func falsePositiveRate(len, n int) float64 {
-	// equation: 1-((1 - (1/m))^n) where m is bits and n is unique entries. k variable (# hash functions) not implemented.
+func falsePositiveRate(len, n, k int) float64 {
+	// equation: 1-((1 - (1/m))^nk)^k where m is bits, n is unique entries, and k is number of hashes
 	// math here: https://brilliant.org/wiki/bloom-filter/
-	base := 1 - float64(1)/float64(len*8)
-	falsePositiveRate := 1 - math.Pow(base, float64(n))
+	m := len * 8
+	base := 1 - float64(1)/float64(m)
+	inner := 1 - math.Pow(base, float64(n*k))
+	falsePositiveRate := math.Pow(inner, float64(k))
 	return falsePositiveRate
 }
