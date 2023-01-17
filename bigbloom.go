@@ -2,6 +2,7 @@ package bloom
 
 import (
 	"crypto/sha512"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -12,6 +13,9 @@ import (
 type BigBloom struct {
 	// current number of unique entries
 	n int
+
+	// number of hash functions
+	k int
 
 	// bloom filter bytes
 	bs []byte
@@ -24,6 +28,9 @@ type BigBloom struct {
 
 	// optional, the maximum allowed false positive rate until no more entries accepted
 	maxFalsePositiveRate *float64
+
+	// is loaded using FromBytes. This is used to ignore accuracy calculations
+	isLoaded bool
 }
 
 //
@@ -34,10 +41,12 @@ type BigBloom struct {
 func NewBigBloom(len int) *BigBloom {
 	return &BigBloom{
 		n:                    0,
+		k:                    3,
 		bs:                   make([]byte, len),
 		len:                  len,
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
+		isLoaded:             false,
 	}
 }
 
@@ -58,10 +67,12 @@ func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) 
 
 	return &BigBloom{
 		n:                    0,
+		k:                    3,
 		bs:                   make([]byte, len),
 		len:                  len,
 		maxFalsePositiveRate: &maxFalsePositiveRate,
 		cap:                  &cap,
+		isLoaded:             false,
 	}, nil
 
 }
@@ -100,6 +111,21 @@ func NewBigBloomConstrain(len int, cap *int, maxFalsePositiveRate *float64) (*Bi
 	return b, nil
 }
 
+// Load bloom filter from bytes of bloom filter
+// This is useful for loading in a Bloom filter over the wire.
+// This mechanism will disable accuracy calculations because n is unknown
+func FromBytes(bs []byte) *BigBloom {
+	return &BigBloom{
+		n:                    0,
+		k:                    3,
+		bs:                   bs,
+		len:                  len(bs),
+		maxFalsePositiveRate: nil,
+		cap:                  nil,
+		isLoaded:             true,
+	}
+}
+
 //
 // Methods
 //
@@ -127,19 +153,17 @@ func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 		}
 	}
 
-	// concatenate a nonce that increments every 512 bits in order to enlargen the hash
-	var nonce int
-	var h [64]byte
-	for i := 0; i < b.len; i++ {
-		if i%64 == 0 {
-			// new hash unique has to constructed after 512 bits
-			bsNonce := append(bs, byte(nonce))
-			h = sha512.Sum512(bsNonce)
-			nonce++
-		}
-		// set bloom byte to old byte OR hash
-		b.bs[i] = b.bs[i] | h[i%64]
+	totBits := len(b.bs) * 8
+	var h [64]byte = sha512.Sum512(bs)
+	for i := 0; i < b.k; i++ {
+		bytes := h[i : i+8]
+		bitI := binary.BigEndian.Uint64(bytes) % uint64(totBits)
+		byteI := int(math.Floor(float64(bitI) / float64(8)))
+		iInByte := bitI % 8
+		bitFlip := byte(1 << iInByte)
+		b.bs[byteI] = b.bs[byteI] | bitFlip
 	}
+
 	b.n++
 	return b, nil
 }
@@ -152,17 +176,16 @@ func (b *BigBloom) ExistsStr(s string) (bool, float64) {
 
 // Checks for existance of bytes element in a bloom filter. Returns boolean and false positive rate.
 func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
-	var nonce int
-	var h [64]byte
-	for i := 0; i < b.len; i++ {
-		if i%64 == 0 {
-			// new hash unique has to constructed after 512 bits
-			bsNonce := append(bs, byte(nonce))
-			h = sha512.Sum512(bsNonce)
-			nonce++
-		}
-		if (b.bs[i] | h[i%64]) != b.bs[i] {
-			// bloom OR hash changes bloom which means there are 1's present in hash not in bloom
+
+	totBits := len(b.bs) * 8
+	var h [64]byte = sha512.Sum512(bs)
+	for i := 0; i < b.k; i++ {
+		bytes := h[i : i+8]
+		bitI := binary.BigEndian.Uint64(bytes) % uint64(totBits)
+		byteI := int(math.Floor(float64(bitI) / float64(8)))
+		iInByte := bitI % 8
+		bitFlip := byte(1 << iInByte)
+		if b.bs[byteI] != b.bs[byteI]|bitFlip {
 			return false, 1
 		}
 	}
@@ -170,7 +193,11 @@ func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
 }
 
 // Get false positive rate
+// -1 means cannot be calcuated because it is loaded in
 func (b *BigBloom) Accuracy() float64 {
+	if b.isLoaded {
+		return -1
+	}
 	if b.n == 0 {
 		return 1
 	}

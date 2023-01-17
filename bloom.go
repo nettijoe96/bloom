@@ -1,7 +1,8 @@
 package bloom
 
 import (
-	"crypto/sha512"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -17,14 +18,17 @@ type Bloomer interface {
 	ExistsStr(string) (bool, float64)
 	ExistsBytes([]byte) (bool, float64)
 
-	// checks accuracy: returns current false positive rate
+	// checks accuracy: returns current false positive rate. returns -1 if accuracy cannot be calculated
 	Accuracy() float64
 }
 
-// Bloom type is a 512-bit bloom filter that uses a single SHA512 hash.
+// Bloom type is a 512-bit bloom filter that uses a single SHA256 hash.
 type Bloom struct {
 	// current number of unique entries.
 	n int
+
+	// number of hash functions
+	k int
 
 	// bloom filter bytes
 	bs [64]byte
@@ -63,6 +67,7 @@ func (e *AccuracyError) Error() string {
 func NewBloom() *Bloom {
 	return &Bloom{
 		n:                    0,
+		k:                    3, // TODO make variable
 		bs:                   [64]byte{},
 		len:                  64,
 		maxFalsePositiveRate: nil, // don't care about accuracy unless specified
@@ -130,10 +135,14 @@ func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 		}
 	}
 
-	var h [64]byte = sha512.Sum512(bs)
-	for i := 0; i < b.len; i++ {
-		// set bloom byte to old byte OR hash
-		b.bs[i] = b.bs[i] | h[i]
+	var h [32]byte = sha256.Sum256(bs)
+	for i := 0; i < b.k; i++ {
+		bytes := h[i : i+2]
+		bitI := binary.BigEndian.Uint16(bytes) % 512
+		byteI := int(math.Floor(float64(bitI) / float64(8)))
+		iInByte := bitI % 8
+		bitFlip := byte(1 << iInByte)
+		b.bs[byteI] = b.bs[byteI] | bitFlip
 	}
 	b.n++
 	return b, nil
@@ -147,10 +156,14 @@ func (b *Bloom) ExistsStr(s string) (bool, float64) {
 
 // Checks for existance of bytes element in a bloom filter. Returns boolean and false positive rate.
 func (b *Bloom) ExistsBytes(bs []byte) (bool, float64) {
-	var h [64]byte = sha512.Sum512(bs)
-	for i := 0; i < b.len; i++ {
-		if (b.bs[i] | h[i]) != b.bs[i] {
-			// bloom OR hash changes bloom which means there are 1's present in hash not in bloom
+	var h [32]byte = sha256.Sum256(bs)
+	for i := 0; i < b.k; i++ {
+		bytes := h[i : i+2]
+		bitI := binary.BigEndian.Uint16(bytes) % 512
+		byteI := int(math.Floor(float64(bitI) / float64(8)))
+		iInByte := bitI % 8
+		bitFlip := byte(1 << iInByte)
+		if b.bs[byteI] != b.bs[byteI]|bitFlip {
 			return false, 1
 		}
 	}

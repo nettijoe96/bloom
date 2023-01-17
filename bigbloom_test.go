@@ -209,6 +209,11 @@ func TestBigBloomAccuracy(t *testing.T) {
 	// test if accuracy is 1 when no entries
 	b := NewBigBloom(32)
 	assert.Equal(t, float64(1), b.Accuracy())
+
+	// cannot calculate accuracy if loaded in
+	b.isLoaded = true
+	assert.Equal(t, float64(-1), b.Accuracy())
+
 	// rest of accuracy tested in TestFalsePositiveRate
 }
 
