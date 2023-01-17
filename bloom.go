@@ -3,6 +3,7 @@ package bloom
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -137,11 +138,17 @@ func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 
 	var h [32]byte = sha256.Sum256(bs)
 	for i := 0; i < b.k; i++ {
+		// two bytes is more than enough to cover 512 possibilities
 		bytes := h[i : i+2]
+		// find index of bit
 		bitI := binary.BigEndian.Uint16(bytes) % 512
+		// find index of byte
 		byteI := int(math.Floor(float64(bitI) / float64(8)))
+		// bit shift 1
 		iInByte := bitI % 8
+		// bit shift 1
 		bitFlip := byte(1 << iInByte)
+		// set bit to 1
 		b.bs[byteI] = b.bs[byteI] | bitFlip
 	}
 	b.n++
@@ -158,11 +165,17 @@ func (b *Bloom) ExistsStr(s string) (bool, float64) {
 func (b *Bloom) ExistsBytes(bs []byte) (bool, float64) {
 	var h [32]byte = sha256.Sum256(bs)
 	for i := 0; i < b.k; i++ {
+		// two bytes is more than enough to cover 512 possibilities
 		bytes := h[i : i+2]
+		// find index of bit
 		bitI := binary.BigEndian.Uint16(bytes) % 512
+		// find index of byte
 		byteI := int(math.Floor(float64(bitI) / float64(8)))
+		// find index of bit within byte
 		iInByte := bitI % 8
+		// bit shift 1
 		bitFlip := byte(1 << iInByte)
+		// it doesn't exists if there is a bitFlip
 		if b.bs[byteI] != b.bs[byteI]|bitFlip {
 			return false, 1
 		}
@@ -193,6 +206,11 @@ func (b *Bloom) String() string {
 	}
 
 	return buf.String()
+}
+
+// converts bytes of bloom filter to hex string
+func (b *Bloom) Hex() string {
+	return hex.EncodeToString(b.bs[:])
 }
 
 //

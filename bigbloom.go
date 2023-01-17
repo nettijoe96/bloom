@@ -3,6 +3,7 @@ package bloom
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -156,11 +157,17 @@ func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 	totBits := len(b.bs) * 8
 	var h [64]byte = sha512.Sum512(bs)
 	for i := 0; i < b.k; i++ {
+		// 8 bytes is more than enough to cover the largest bloom filter
 		bytes := h[i : i+8]
+		// find index of bit
 		bitI := binary.BigEndian.Uint64(bytes) % uint64(totBits)
+		// find index of byte
 		byteI := int(math.Floor(float64(bitI) / float64(8)))
+		// find index of bit within byte
 		iInByte := bitI % 8
+		// bit shift 1
 		bitFlip := byte(1 << iInByte)
+		// set bit to 1
 		b.bs[byteI] = b.bs[byteI] | bitFlip
 	}
 
@@ -180,11 +187,17 @@ func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
 	totBits := len(b.bs) * 8
 	var h [64]byte = sha512.Sum512(bs)
 	for i := 0; i < b.k; i++ {
+		// 8 bytes is more than enough to cover the largest bloom filter
 		bytes := h[i : i+8]
+		// find index of bit
 		bitI := binary.BigEndian.Uint64(bytes) % uint64(totBits)
+		// find index of byte
 		byteI := int(math.Floor(float64(bitI) / float64(8)))
+		// find index of bit within byte
 		iInByte := bitI % 8
+		// bit shift 1
 		bitFlip := byte(1 << iInByte)
+		// it doesn't exists if there is a bitFlip
 		if b.bs[byteI] != b.bs[byteI]|bitFlip {
 			return false, 1
 		}
@@ -219,4 +232,9 @@ func (b *BigBloom) String() string {
 	}
 
 	return buf.String()
+}
+
+// converts bytes of bloom filter to hex string
+func (b *BigBloom) Hex() string {
+	return hex.EncodeToString(b.bs)
 }
