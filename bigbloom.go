@@ -38,12 +38,11 @@ type BigBloom struct {
 // Constructors
 //
 
-var (
-	k int = 3 // TODO make k = ln(2) * (m/n) where possible
-)
-
-// Constructs len-byte bloom filter with no constraints.
-func NewBigBloom(len int) *BigBloom {
+// Constructs len-byte bloom filter from k.
+func NewBigBloomFromK(len, k int) (*BigBloom, error) {
+	if k < 1 {
+		return nil, errors.New("k cannot be less than 1")
+	}
 	return &BigBloom{
 		n:                    0,
 		k:                    k,
@@ -52,25 +51,65 @@ func NewBigBloom(len int) *BigBloom {
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
 		isLoaded:             false,
-	}
+	}, nil
 }
 
-// Constructs bloom filter with the minimum length to satisify both constraints.
+// Constructs len-byte bloom filter from capacity
+func NewBigBloomFromCap(len, cap int) (*BigBloom, error) {
+	if cap < 1 {
+		return nil, errors.New("capacity cannot be less than 1")
+	}
+	return &BigBloom{
+		n:                    0,
+		k:                    calcKFromCap(len, cap),
+		bs:                   make([]byte, len),
+		len:                  len,
+		maxFalsePositiveRate: nil,
+		cap:                  nil,
+		isLoaded:             false,
+	}, nil
+}
+
+// Constructs len-byte bloom filter from maxFalsePositiveRate
+func NewBigBloomFromAcc(len int, maxFalsePositiveRate float64) (*BigBloom, error) {
+	if maxFalsePositiveRate <= 0 || maxFalsePositiveRate >= 1 {
+		return nil, errors.New("false positive rate must be between 0 and 1")
+	}
+	return &BigBloom{
+		n:                    0,
+		k:                    calcKFromAcc(len, maxFalsePositiveRate),
+		bs:                   make([]byte, len),
+		len:                  len,
+		maxFalsePositiveRate: nil,
+		cap:                  nil,
+		isLoaded:             false,
+	}, nil
+}
+
+// Constructs bloom filter with cap and maxFalsePositiveRate
 func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) {
 	if cap < 1 {
 		return nil, errors.New("capacity cannot be less than 1")
 	}
-	if maxFalsePositiveRate <= 0 {
-		return nil, errors.New("false positive rate must be greater than 0")
+	if maxFalsePositiveRate <= 0 || maxFalsePositiveRate >= 1 {
+		return nil, errors.New("false positive rate must be between 0 and 1")
 	}
 
-	// solving for m in equation: acc = ( 1 - e^(-kn/m) )^k
-	// m = (k * n) / ( -1 * (n / ln( 1-(acc)^1/k ) ) )
-	// see math https://brilliant.org/wiki/bloom-filter/
-	rootAcc := math.Pow(maxFalsePositiveRate, float64(1)/float64(k))
-	bits := -1 * (float64(k*cap) / math.Log(1-rootAcc))
-	// take ceiling, rounding down could cause the constaint to be reached before max capacity
-	len := int(math.Ceil(bits / 8))
+	// math:
+	// eq1: k = ln(2) * m/n
+	// eq2: acc = (1 - (1 - e^(-kn/m))^k
+	// substitute k from eq1 into eq2 ...
+	// acc = (.5)^(ln(2) * m/n)
+	// log0.5(acc) = ln(2) * m/n
+	// m = (n * log0.5(acc))/ln(2)
+	// change of base ...
+	// m = (n * ln(acc)) / (ln(0.5) * ln(2))
+	numerator := float64(cap) * math.Log(maxFalsePositiveRate)
+	denom := math.Log(.5) * math.Log(2)
+	mFloat := numerator / denom
+	len := int(math.Ceil(mFloat / 8))
+	// calculate k using m
+	k := calcKFromCap(len, cap)
 
 	return &BigBloom{
 		n:                    0,
@@ -84,53 +123,22 @@ func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) 
 
 }
 
-// Equivalent to NewBloomConstain. Constructs len-byte bloom filter with constraints.
-// If cap is provided, bloom filter will not allow for more than that amount of unique elements.
-// If maxFalsePositiveRate is provided then the false positive rate of the filter will not be allowed to increase beyond that amount.
-// ex: if maxFalsePositiveRate is 0.1 then 10% chance of false positive when capacity is full
-func NewBigBloomConstrain(len int, cap *int, maxFalsePositiveRate *float64) (*BigBloom, error) {
-	b := NewBigBloom(len)
-
-	if cap != nil {
-		if *cap < 1 {
-			return nil, errors.New("capacity cannot be less than 1")
-		}
-		b.cap = cap
-	}
-	if maxFalsePositiveRate != nil {
-		if *maxFalsePositiveRate <= 0 {
-			return nil, errors.New("false positive rate must be greater than 0")
-		}
-		b.maxFalsePositiveRate = maxFalsePositiveRate
-	}
-	if cap == nil || maxFalsePositiveRate == nil {
-		// do not need to check for compatibility of constraints.
-		return b, nil
-	}
-
-	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
-	calcMaxFalsePositiveRate := falsePositiveRate(len, *cap, b.k)
-	if calcMaxFalsePositiveRate > *maxFalsePositiveRate {
-		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
-		return nil, errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
-	}
-
-	return b, nil
-}
-
-// Load bloom filter from bytes of bloom filter
+// Load bloom filter from bytes of bloom filter and k
 // This is useful for loading in a Bloom filter over the wire.
 // This mechanism will disable accuracy calculations because n is unknown
-func FromBytes(bs []byte) *BigBloom {
+func FromBytes(bs []byte, k int) (*BigBloom, error) {
+	if k < 1 {
+		return nil, errors.New("k cannot be less than 1")
+	}
 	return &BigBloom{
 		n:                    0,
-		k:                    3,
+		k:                    k,
 		bs:                   bs,
 		len:                  len(bs),
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
 		isLoaded:             true,
-	}
+	}, nil
 }
 
 //
@@ -221,6 +229,36 @@ func (b *BigBloom) Accuracy() float64 {
 		return 1
 	}
 	return falsePositiveRate(b.len, b.n, b.k)
+}
+
+// constains bloom from not adding more than cap insertions
+func (b *BigBloom) AddCapacityConstraint(cap int) error {
+	if cap < 1 {
+		return errors.New("capacity cannot be less than 1")
+	}
+	if b.maxFalsePositiveRate != nil {
+		// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
+		if !constraintsCompatible(b.len, cap, b.k, *b.maxFalsePositiveRate) {
+			return errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
+		}
+	}
+	b.cap = &cap
+	return nil
+}
+
+// constains bloom from not adding more insertions that cause accuracy to be worse than maxFalsePositiveRate
+func (b *BigBloom) AddAccuracyConstraint(maxFalsePositiveRate float64) error {
+	if maxFalsePositiveRate <= 0 || maxFalsePositiveRate >= 1 {
+		return errors.New("false positive rate must be between 0 and 1")
+	}
+	if b.cap != nil {
+		// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
+		if !constraintsCompatible(b.len, *b.cap, b.k, maxFalsePositiveRate) {
+			return errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
+		}
+	}
+	b.maxFalsePositiveRate = &maxFalsePositiveRate
+	return nil
 }
 
 func (b *BigBloom) String() string {

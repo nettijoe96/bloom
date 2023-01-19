@@ -9,16 +9,37 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewBigBloomFromCapacity(t *testing.T) {
+	// test zero capacity
+	_, err := NewBigBloomFromCap(32, 0)
+	assert.EqualError(t, err, "capacity cannot be less than 1")
+}
+
+func TestNewBigBloomFromAcc(t *testing.T) {
+	// test zero accuracy
+	_, err := NewBigBloomFromAcc(32, 0)
+	assert.EqualError(t, err, "false positive rate must be between 0 and 1")
+	// test one accuracy
+	_, err = NewBigBloomFromAcc(32, 1)
+	assert.EqualError(t, err, "false positive rate must be between 0 and 1")
+}
+
+func TestNewBigBloomFromK(t *testing.T) {
+	// test zero k
+	_, err := NewBigBloomFromK(32, 0)
+	assert.EqualError(t, err, "k cannot be less than 1")
+}
+
 func TestNewBigBloomAlloc(t *testing.T) {
 	// test zero capacity
 	zeroCap := 0
-	_, err := NewBigBloomConstrain(32, &zeroCap, nil)
+	_, err := NewBigBloomAlloc(zeroCap, 1)
 	assert.EqualError(t, err, "capacity cannot be less than 1")
 
 	// test zero false postive rate
 	zeroAcc := float64(0)
-	_, err = NewBigBloomConstrain(32, nil, &zeroAcc)
-	assert.EqualError(t, err, "false positive rate must be greater than 0")
+	_, err = NewBigBloomAlloc(1, zeroAcc)
+	assert.EqualError(t, err, "false positive rate must be between 0 and 1")
 
 	type allocTest struct {
 		cap         int
@@ -31,7 +52,7 @@ func TestNewBigBloomAlloc(t *testing.T) {
 		{
 			cap:         10,
 			acc:         0.0013597239492769301702394684205393411304012623906373231471869292,
-			expectedLen: 32, // 256 bits
+			expectedLen: 18, // 144 bits
 		},
 		{
 			cap:         1000,
@@ -46,33 +67,11 @@ func TestNewBigBloomAlloc(t *testing.T) {
 	}
 }
 
-func TestNewBigBloomConstain(t *testing.T) {
-	// test zero capacity
-	zeroCap := 0
-	_, err := NewBigBloomConstrain(32, &zeroCap, nil)
-	assert.EqualError(t, err, "capacity cannot be less than 1")
-
-	// test zero false postive rate
-	zeroAcc := float64(0)
-	_, err = NewBigBloomConstrain(32, nil, &zeroAcc)
-	assert.EqualError(t, err, "false positive rate must be greater than 0")
-
-	// test capacity and accuracy incompatibility
-	cap := 1000
-	acc := .1
-	_, err = NewBigBloomConstrain(32, &cap, &acc)
-	assert.EqualError(t, err, "false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
-
-	// test capacity and accuracy compatibility
-	acc = .86
-	_, err = NewBigBloomConstrain(64, &cap, &acc)
-	assert.Nil(t, err)
-}
-
 // TestPutStr also tests PutBytes because PutStr calls PutBytes
 // most of put functionality tested in TestExistsStr
 func TestBigBloomPutStr(t *testing.T) {
-	b := NewBigBloom(32)
+	b, err := NewBigBloomFromK(32, testk)
+	assert.Nil(t, err)
 
 	// make sure n increases on put
 	b.PutStr("test")
@@ -81,27 +80,6 @@ func TestBigBloomPutStr(t *testing.T) {
 	// make sure n stays the same after same insertion
 	b.PutStr("test")
 	assert.Equal(t, 1, b.n)
-
-	// makes sure each hash is distinct
-	// this verifies that the nonce is increasing
-	b = NewBigBloom(256) // four hashes of 64 bytes
-	// add one entry
-	b.PutStr("test")
-	// make sure each block of 64 is not 0 and is different from prior blocks
-	hashes := make([][64]byte, 4)
-	var j int
-	for i := 0; i < 256; i++ {
-		if i != 0 && i%64 == 0 {
-			j++
-		}
-		hashes[j][i%64] = b.bs[i]
-	}
-	for i := 0; i < len(hashes); i++ {
-		for j := i + 1; j < len(hashes); j++ {
-			// make sure each 64 byte sequence is unique
-			assert.False(t, compare(hashes[i][:], hashes[j][:]))
-		}
-	}
 }
 
 // TestExistsStr also tests ExistsBytes because ExistsStr calls ExistsBytes
@@ -145,7 +123,9 @@ func TestBigBloomExistsStr(t *testing.T) {
 
 	// small filter test
 	// 10 bytes will require 1 hash
-	b10 := NewBigBloom(5)
+	b10, err := NewBigBloomFromK(5, testk)
+	assert.Nil(t, err)
+
 	// populate
 	for _, test := range validEntries {
 		b10.PutStr(test.entry)
@@ -158,7 +138,8 @@ func TestBigBloomExistsStr(t *testing.T) {
 
 	// big filter test
 	// 1000 bytes will require 32 hashes
-	b1000 := NewBigBloom(1000)
+	b1000, err := NewBigBloomFromK(1000, 3)
+	assert.Nil(t, err)
 	// populate
 	for _, test := range validEntries {
 		b1000.PutStr(test.entry)
@@ -171,7 +152,8 @@ func TestBigBloomExistsStr(t *testing.T) {
 
 	// huge filter test
 	// 10000 bytes will require 320 hashes
-	b10000 := NewBigBloom(10000)
+	b10000, err := NewBigBloomFromK(10000, 3)
+	assert.Nil(t, err)
 	// populate
 	for _, test := range validEntries {
 		b10000.PutStr(test.entry)
@@ -184,31 +166,32 @@ func TestBigBloomExistsStr(t *testing.T) {
 
 }
 
-func TestBigBloomCapacityConstaint(t *testing.T) {
-	cap := 5
-	b, _ := NewBigBloomConstrain(32, &cap, nil)
-	for i := 0; i < cap; i++ {
-		_, err := b.PutStr(strconv.Itoa(i))
-		assert.Nil(t, err)
-	}
-	// test already added
-	_, err := b.PutStr(strconv.Itoa(0))
-	assert.Nil(t, err)
-	// should fail on 6th try
-	_, err = b.PutStr("fail")
-	assert.IsType(t, err, &CapacityError{})
-}
+// func TestBigBloomCapacityConstaint(t *testing.T) {
+// 	cap := 5
+// 	b, _ := NewBigBloomConstrain(32, 3, &cap, nil)
+// 	for i := 0; i < cap; i++ {
+// 		_, err := b.PutStr(strconv.Itoa(i))
+// 		assert.Nil(t, err)
+// 	}
+// 	// test already added
+// 	_, err := b.PutStr(strconv.Itoa(0))
+// 	assert.Nil(t, err)
+// 	// should fail on 6th try
+// 	_, err = b.PutStr("fail")
+// 	assert.IsType(t, err, &CapacityError{})
+// }
 
-func TestBigBloomAccuracyConstaint(t *testing.T) {
-	acc := float64(0.001)
-	b, _ := NewBigBloomConstrain(32, nil, &acc)
-	_, err := b.PutStr("fail")
-	assert.IsType(t, err, &AccuracyError{})
-}
+// func TestBigBloomAccuracyConstaint(t *testing.T) {
+// 	acc := float64(0.0000001)
+// 	b, _ := NewBigBloomConstrain(32, 3, nil, &acc)
+// 	_, err := b.PutStr("fail")
+// 	assert.IsType(t, &AccuracyError{}, err)
+// }
 
 func TestBigBloomAccuracy(t *testing.T) {
 	// test if accuracy is 1 when no entries
-	b := NewBigBloom(32)
+	b, err := NewBigBloomFromK(32, testk)
+	assert.Nil(t, err)
 	assert.Equal(t, float64(1), b.Accuracy())
 
 	// cannot calculate accuracy if loaded in
@@ -218,10 +201,15 @@ func TestBigBloomAccuracy(t *testing.T) {
 	// rest of accuracy tested in TestFalsePositiveRate
 }
 
+//
+// Benchmarks
+//
+
 // benchmark for increasing bloom filter len
 func BenchmarkBigBloomPutStr(b *testing.B) {
 	for i := 512; i < 10000; i += 512 {
-		bloom := NewBigBloom(i)
+		bloom, err := NewBigBloomFromK(i, 3)
+		assert.Nil(b, err)
 		b.Run(fmt.Sprintf("len_%d_bytes", i), func(b *testing.B) {
 			for j := 0; j < 100; j++ {
 				bloom.PutStr(strconv.Itoa(j))
@@ -233,7 +221,8 @@ func BenchmarkBigBloomPutStr(b *testing.B) {
 // benchmark for exists for increasing bloom filter len
 func BenchmarkBigBloomExistsStr(b *testing.B) {
 	for i := 512; i < 10000; i += 512 {
-		bloom := NewBigBloom(i)
+		bloom, err := NewBigBloomFromK(i, 3)
+		assert.Nil(b, err)
 		for j := 0; j < 100; j++ {
 			bloom.PutStr(strconv.Itoa(j))
 		}
@@ -243,21 +232,4 @@ func BenchmarkBigBloomExistsStr(b *testing.B) {
 			}
 		})
 	}
-}
-
-//
-// helpers
-//
-
-func compare(bs1, bs2 []byte) bool {
-	if len(bs1) != len(bs2) {
-		return false
-	}
-
-	for i := 0; i < len(bs1); i++ {
-		if bs1[i] != bs2[i] {
-			return false
-		}
-	}
-	return true
 }

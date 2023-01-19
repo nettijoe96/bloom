@@ -21,6 +21,10 @@ type Bloomer interface {
 
 	// checks accuracy: returns current false positive rate. returns -1 if accuracy cannot be calculated
 	Accuracy() float64
+
+	// add constaints to bloom filter
+	AddAccuracyConstraint(float64) error
+	AddCapacityConstraint(int) error
 }
 
 // Bloom type is a 512-bit bloom filter that uses a single SHA256 hash.
@@ -64,49 +68,52 @@ func (e *AccuracyError) Error() string {
 // Bloom type constructors
 //
 
-// Constructs 512-bit bloom filter with no constaints
-func NewBloom() *Bloom {
-	return &Bloom{
-		n:                    0,
-		k:                    3, // TODO make variable
-		bs:                   [64]byte{},
-		len:                  64,
-		maxFalsePositiveRate: nil, // don't care about accuracy unless specified
-		cap:                  nil, // don't care about capacity unless specified
+// Constructs len-byte bloom filter from k.
+func NewBloomFromK(k int) (*BigBloom, error) {
+	if k < 1 {
+		return nil, errors.New("k cannot be less than 1")
 	}
+	return &BigBloom{
+		n:                    0,
+		k:                    k,
+		bs:                   make([]byte, 64),
+		len:                  64,
+		maxFalsePositiveRate: nil,
+		cap:                  nil,
+		isLoaded:             false,
+	}, nil
 }
 
-// Constructs 512-bit bloom filter with constraints. If cap is provided, bloom filter will not allow for more than that amount of unique elements.
-// If maxFalsePositiveRate is provided then the false positive rate of the filter will not be allowed to increase beyond that amount
-// ex: if maxFalsePositiveRate is 0.1 then 10% chance of false positive when capacity is full
-func NewBloomConstrain(cap *int, maxFalsePositiveRate *float64) (*Bloom, error) {
-	b := NewBloom()
+// Constructs len-byte bloom filter from capacity
+func NewBloomFromCap(cap int) (*BigBloom, error) {
+	if cap < 1 {
+		return nil, errors.New("capacity cannot be less than 1")
+	}
+	return &BigBloom{
+		n:                    0,
+		k:                    calcKFromCap(64, cap),
+		bs:                   make([]byte, 64),
+		len:                  64,
+		maxFalsePositiveRate: nil,
+		cap:                  nil,
+		isLoaded:             false,
+	}, nil
+}
 
-	if cap != nil {
-		if *cap < 1 {
-			return nil, errors.New("capacity cannot be less than 1")
-		}
-		b.cap = cap
+// Constructs len-byte bloom filter from maxFalsePositiveRate
+func NewBloomFromAcc(maxFalsePositiveRate float64) (*BigBloom, error) {
+	if maxFalsePositiveRate <= 0 || maxFalsePositiveRate >= 1 {
+		return nil, errors.New("false positive rate must be between 0 and 1")
 	}
-	if maxFalsePositiveRate != nil {
-		if *maxFalsePositiveRate <= 0 {
-			return nil, errors.New("false positive rate must be greater than 0")
-		}
-		b.maxFalsePositiveRate = maxFalsePositiveRate
-	}
-	if cap == nil || maxFalsePositiveRate == nil {
-		// do not need to check for compatibility of constraints.
-		return b, nil
-	}
-
-	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
-	calcMaxFalsePositiveRate := falsePositiveRate(b.len, *cap, b.k)
-	if calcMaxFalsePositiveRate > *maxFalsePositiveRate {
-		// if the maximum calculated false positive rate is greater user inputed allowed false positive rate, fail.
-		return nil, errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
-	}
-
-	return b, nil
+	return &BigBloom{
+		n:                    0,
+		k:                    calcKFromAcc(64, maxFalsePositiveRate),
+		bs:                   make([]byte, 64),
+		len:                  64,
+		maxFalsePositiveRate: nil,
+		cap:                  nil,
+		isLoaded:             false,
+	}, nil
 }
 
 //
@@ -191,6 +198,36 @@ func (b *Bloom) Accuracy() float64 {
 	return falsePositiveRate(b.len, b.n, b.k)
 }
 
+// constains bloom from not adding more than cap insertions
+func (b *Bloom) AddCapacityConstraint(cap int) error {
+	if cap < 1 {
+		return errors.New("capacity cannot be less than 1")
+	}
+	if b.cap != nil {
+		// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
+		if !constraintsCompatible(b.len, cap, b.k, *b.maxFalsePositiveRate) {
+			return errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
+		}
+	}
+	b.cap = &cap
+	return nil
+}
+
+// constains bloom from not adding more insertions that cause accuracy to be worse than maxFalsePositiveRate
+func (b *Bloom) AddAccuracyConstraint(maxFalsePositiveRate float64) error {
+	if maxFalsePositiveRate <= 0 || maxFalsePositiveRate >= 1 {
+		return errors.New("false positive rate must be between 0 and 1")
+	}
+	if b.cap != nil {
+		// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
+		if !constraintsCompatible(b.len, *b.cap, b.k, maxFalsePositiveRate) {
+			return errors.New("false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
+		}
+	}
+	b.maxFalsePositiveRate = &maxFalsePositiveRate
+	return nil
+}
+
 func (b *Bloom) String() string {
 	var buf strings.Builder
 
@@ -225,4 +262,62 @@ func falsePositiveRate(len, n, k int) float64 {
 	inner := 1 - math.Pow(base, float64(n*k))
 	falsePositiveRate := math.Pow(inner, float64(k))
 	return falsePositiveRate
+}
+
+// used when both constraints are set to check compatability
+func constraintsCompatible(len, cap, k int, allowedMaxFalsePositiveRate float64) bool {
+	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
+	calcMaxFalsePositiveRate := falsePositiveRate(len, cap, k)
+	if calcMaxFalsePositiveRate > allowedMaxFalsePositiveRate {
+		// if the maximum calculated false positive rate is greater than the inputed allowed false positive rate, fail.
+		// this is more readable than returning calcMaxFalsePositiveRate <= allowedMaxFalsePositiveRate
+		return false
+	}
+	return true
+}
+
+// calculate k from len of filter and capacity
+func calcKFromCap(len, n int) int {
+	m := len * 8
+	// k = ln(2) * m/n
+	kFloat := math.Log(2) * float64(m) / float64(n)
+	// round to nearest int
+	var k int
+	if kFloat < 1 {
+		k = 1
+	} else {
+		k = int(math.Round(kFloat))
+	}
+	return k
+}
+
+// calculate k from len of filter and accuracy
+func calcKFromAcc(len int, acc float64) int {
+	m := len * 8
+
+	// eq1: k = ln(2) * m/n
+	// rearranged: n = ln(2) * m/k
+	// eq2: acc = (1 - (1 - 1/m)^-kn)^k
+	// replace n in eq2 with e1 ...
+	// acc = (1 - (1 - 1/m)^(-ln(2)m))^k
+	// let base2 = 1 - (1 - 1/m)^(-ln(2)m)
+	// solve for k ...
+	// k = logbase2(acc)
+	// change of base ...
+	// k = ln(acc) / ln(base2)
+	// expand b ...
+	// k = ln(acc) / ln( 1-(1 - 1/m)^(-ln(2)m) )
+	base1 := 1 - float64(1)/float64(m)
+	expCalc := math.Pow(base1, math.Log(2)*float64(m))
+	base2 := 1 - expCalc
+	kFloat := math.Log(acc) / math.Log(base2)
+	var k int
+	if kFloat < 1 {
+		// k can't be less than 1
+		k = 1
+	} else {
+		// k must be an int
+		k = int(math.Round(kFloat))
+	}
+	return k
 }
