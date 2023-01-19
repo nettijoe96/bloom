@@ -166,28 +166,6 @@ func TestBigBloomExistsStr(t *testing.T) {
 
 }
 
-// func TestBigBloomCapacityConstaint(t *testing.T) {
-// 	cap := 5
-// 	b, _ := NewBigBloomConstrain(32, 3, &cap, nil)
-// 	for i := 0; i < cap; i++ {
-// 		_, err := b.PutStr(strconv.Itoa(i))
-// 		assert.Nil(t, err)
-// 	}
-// 	// test already added
-// 	_, err := b.PutStr(strconv.Itoa(0))
-// 	assert.Nil(t, err)
-// 	// should fail on 6th try
-// 	_, err = b.PutStr("fail")
-// 	assert.IsType(t, err, &CapacityError{})
-// }
-
-// func TestBigBloomAccuracyConstaint(t *testing.T) {
-// 	acc := float64(0.0000001)
-// 	b, _ := NewBigBloomConstrain(32, 3, nil, &acc)
-// 	_, err := b.PutStr("fail")
-// 	assert.IsType(t, &AccuracyError{}, err)
-// }
-
 func TestBigBloomAccuracy(t *testing.T) {
 	// test if accuracy is 1 when no entries
 	b, err := NewBigBloomFromK(32, testk)
@@ -199,6 +177,19 @@ func TestBigBloomAccuracy(t *testing.T) {
 	assert.Equal(t, float64(-1), b.Accuracy())
 
 	// rest of accuracy tested in TestFalsePositiveRate
+}
+
+// tests huge bloom filter
+func TestTrillionBitBloom(t *testing.T) {
+	m := 125000000000
+	b, err := NewBigBloomFromCap(m, 100000)
+	assert.Nil(t, err)
+	_, err = b.PutStr("test")
+	assert.Nil(t, err)
+	exists, _ := b.ExistsStr("test")
+	assert.True(t, exists)
+	exists, _ = b.ExistsStr("fail")
+	assert.False(t, exists)
 }
 
 //

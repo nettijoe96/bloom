@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// BigBloom is a bloom filter with a variable length. It uses a SHA512 hash
+// BigBloom is a bloom filter with a variable length that uses SHA256 hashing with a nonce.
 type BigBloom struct {
 	// current number of unique entries
 	n int
@@ -235,8 +235,11 @@ func (b *BigBloom) Accuracy() float64 {
 	return falsePositiveRate(b.len, b.n, b.k)
 }
 
-// constains bloom from not adding more than cap insertions
+// Constrains bloom from not adding more than cap insertions
 func (b *BigBloom) AddCapacityConstraint(cap int) error {
+	if b.isLoaded {
+		return errors.New("cannot add constraints to loaded bloom filters")
+	}
 	if cap < 1 {
 		return errors.New("capacity cannot be less than 1")
 	}
@@ -250,8 +253,11 @@ func (b *BigBloom) AddCapacityConstraint(cap int) error {
 	return nil
 }
 
-// constains bloom from not adding more insertions that cause accuracy to be worse than maxFalsePositiveRate
+// Constrains bloom from not adding more insertions that cause accuracy to be worse than maxFalsePositiveRate
 func (b *BigBloom) AddAccuracyConstraint(maxFalsePositiveRate float64) error {
+	if b.isLoaded {
+		return errors.New("cannot add constraints to loaded bloom filters")
+	}
 	if maxFalsePositiveRate <= 0 || maxFalsePositiveRate >= 1 {
 		return errors.New("false positive rate must be between 0 and 1")
 	}

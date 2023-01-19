@@ -22,12 +22,14 @@ type Bloomer interface {
 	// checks accuracy: returns current false positive rate. returns -1 if accuracy cannot be calculated
 	Accuracy() float64
 
-	// add constaints to bloom filter
+	// add constraints to bloom filter
 	AddAccuracyConstraint(float64) error
 	AddCapacityConstraint(int) error
 }
 
-// Bloom type is a 512-bit bloom filter that uses a single SHA256 hash.
+const BLOOM_LEN = 64
+
+// Bloom type is a 512-bit bloom filter that uses SHA256 hashing with a nonce.
 type Bloom struct {
 	// current number of unique entries.
 	n int
@@ -36,7 +38,7 @@ type Bloom struct {
 	k int
 
 	// bloom filter bytes
-	bs [64]byte
+	bs [BLOOM_LEN]byte
 
 	// always set to 64
 	len int
@@ -76,8 +78,8 @@ func NewBloomFromK(k int) (*BigBloom, error) {
 	return &BigBloom{
 		n:                    0,
 		k:                    k,
-		bs:                   make([]byte, 64),
-		len:                  64,
+		bs:                   make([]byte, BLOOM_LEN),
+		len:                  BLOOM_LEN,
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
 		isLoaded:             false,
@@ -91,9 +93,9 @@ func NewBloomFromCap(cap int) (*BigBloom, error) {
 	}
 	return &BigBloom{
 		n:                    0,
-		k:                    calcKFromCap(64, cap),
-		bs:                   make([]byte, 64),
-		len:                  64,
+		k:                    calcKFromCap(BLOOM_LEN, cap),
+		bs:                   make([]byte, BLOOM_LEN),
+		len:                  BLOOM_LEN,
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
 		isLoaded:             false,
@@ -107,9 +109,9 @@ func NewBloomFromAcc(maxFalsePositiveRate float64) (*BigBloom, error) {
 	}
 	return &BigBloom{
 		n:                    0,
-		k:                    calcKFromAcc(64, maxFalsePositiveRate),
-		bs:                   make([]byte, 64),
-		len:                  64,
+		k:                    calcKFromAcc(BLOOM_LEN, maxFalsePositiveRate),
+		bs:                   make([]byte, BLOOM_LEN),
+		len:                  BLOOM_LEN,
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
 		isLoaded:             false,
@@ -202,7 +204,7 @@ func (b *Bloom) Accuracy() float64 {
 	return falsePositiveRate(b.len, b.n, b.k)
 }
 
-// constains bloom from not adding more than cap insertions
+// Constrains bloom from not adding more than cap insertions
 func (b *Bloom) AddCapacityConstraint(cap int) error {
 	if cap < 1 {
 		return errors.New("capacity cannot be less than 1")
@@ -217,7 +219,7 @@ func (b *Bloom) AddCapacityConstraint(cap int) error {
 	return nil
 }
 
-// constains bloom from not adding more insertions that cause accuracy to be worse than maxFalsePositiveRate
+// Constrains bloom from not adding insertions that would cause accuracy to be worse than maxFalsePositiveRate
 func (b *Bloom) AddAccuracyConstraint(maxFalsePositiveRate float64) error {
 	if maxFalsePositiveRate <= 0 || maxFalsePositiveRate >= 1 {
 		return errors.New("false positive rate must be between 0 and 1")
@@ -258,6 +260,7 @@ func (b *Bloom) Hex() string {
 // helpers
 //
 
+// calculate false positive rate
 func falsePositiveRate(len, n, k int) float64 {
 	// equation: 1-((1 - (1/m))^nk)^k where m is bits, n is unique entries, and k is number of hashes
 	// math here: https://brilliant.org/wiki/bloom-filter/
@@ -272,12 +275,7 @@ func falsePositiveRate(len, n, k int) float64 {
 func constraintsCompatible(len, cap, k int, allowedMaxFalsePositiveRate float64) bool {
 	// check if contraints capacity and maxFalsePositiveRate are compatible together with this size bloom filter
 	calcMaxFalsePositiveRate := falsePositiveRate(len, cap, k)
-	if calcMaxFalsePositiveRate > allowedMaxFalsePositiveRate {
-		// if the maximum calculated false positive rate is greater than the inputed allowed false positive rate, fail.
-		// this is more readable than returning calcMaxFalsePositiveRate <= allowedMaxFalsePositiveRate
-		return false
-	}
-	return true
+	return calcMaxFalsePositiveRate <= allowedMaxFalsePositiveRate
 }
 
 // calculate k from len of filter and capacity
@@ -309,7 +307,7 @@ func calcKFromAcc(len int, acc float64) int {
 	// k = logbase2(acc)
 	// change of base ...
 	// k = ln(acc) / ln(base2)
-	// expand b ...
+	// expand base2 ...
 	// k = ln(acc) / ln( 1-(1 - 1/m)^(-ln(2)m) )
 	base1 := 1 - float64(1)/float64(m)
 	expCalc := math.Pow(base1, math.Log(2)*float64(m))
