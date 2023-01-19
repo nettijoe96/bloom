@@ -1,7 +1,7 @@
 package bloom
 
 import (
-	"crypto/sha512"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -169,10 +169,12 @@ func (b *BigBloom) PutBytes(bs []byte) (*BigBloom, error) {
 	}
 
 	totBits := len(b.bs) * 8
-	var h [64]byte = sha512.Sum512(bs)
 	for i := 0; i < b.k; i++ {
-		// 8 bytes is more than enough to cover the largest bloom filter
-		bytes := h[i : i+8]
+		// a single change in bs makes the whole SHA hash change, so an appended nonce is suitable
+		bsNonce := append(bs, byte(i))
+		var h [32]byte = sha256.Sum256(bsNonce)
+		// get a random uint64 number
+		bytes := h[0:8]
 		// find index of bit
 		bitI := binary.BigEndian.Uint64(bytes) % uint64(totBits)
 		// find index of byte
@@ -199,10 +201,12 @@ func (b *BigBloom) ExistsStr(s string) (bool, float64) {
 func (b *BigBloom) ExistsBytes(bs []byte) (bool, float64) {
 
 	totBits := len(b.bs) * 8
-	var h [64]byte = sha512.Sum512(bs)
 	for i := 0; i < b.k; i++ {
-		// 8 bytes is more than enough to cover the largest bloom filter
-		bytes := h[i : i+8]
+		// a single change in bs makes the whole SHA hash change, so an appended nonce is suitable
+		bsNonce := append(bs, byte(i))
+		var h [32]byte = sha256.Sum256(bsNonce)
+		// get a random uint64 number
+		bytes := h[0:8]
 		// find index of bit
 		bitI := binary.BigEndian.Uint64(bytes) % uint64(totBits)
 		// find index of byte

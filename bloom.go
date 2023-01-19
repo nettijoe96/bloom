@@ -143,10 +143,12 @@ func (b *Bloom) PutBytes(bs []byte) (*Bloom, error) {
 		}
 	}
 
-	var h [32]byte = sha256.Sum256(bs)
 	for i := 0; i < b.k; i++ {
-		// two bytes is more than enough to cover 512 possibilities
-		bytes := h[i : i+2]
+		// a single change in bs makes the whole SHA hash change, so an appended nonce is suitable
+		bsNonce := append(bs, byte(i))
+		var h [32]byte = sha256.Sum256(bsNonce)
+		// get a random uint64 number
+		bytes := h[0:8]
 		// find index of bit
 		bitI := binary.BigEndian.Uint16(bytes) % 512
 		// find index of byte
@@ -170,10 +172,12 @@ func (b *Bloom) ExistsStr(s string) (bool, float64) {
 
 // Checks for existance of bytes element in a bloom filter. Returns boolean and false positive rate.
 func (b *Bloom) ExistsBytes(bs []byte) (bool, float64) {
-	var h [32]byte = sha256.Sum256(bs)
 	for i := 0; i < b.k; i++ {
+		// a single change in bs makes the whole SHA hash change, so an appended nonce is suitable
+		bsNonce := append(bs, byte(i))
+		var h [32]byte = sha256.Sum256(bsNonce)
 		// two bytes is more than enough to cover 512 possibilities
-		bytes := h[i : i+2]
+		bytes := h[0:8]
 		// find index of bit
 		bitI := binary.BigEndian.Uint16(bytes) % 512
 		// find index of byte
