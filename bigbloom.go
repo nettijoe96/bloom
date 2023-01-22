@@ -126,9 +126,12 @@ func NewBigBloomAlloc(cap int, maxFalsePositiveRate float64) (*BigBloom, error) 
 // Load bloom filter from bytes of bloom filter and k
 // This is useful for loading in a Bloom filter over the wire.
 // This mechanism will disable accuracy calculations because n is unknown
-func FromBytes(bs []byte, k int) (*BigBloom, error) {
+func NewBigBloomFromBytes(bs []byte, k int) (*BigBloom, error) {
 	if k < 1 {
 		return nil, errors.New("k cannot be less than 1")
+	}
+	if len(bs) == 0 {
+		return nil, errors.New("bloom filter length cannot be 0")
 	}
 	return &BigBloom{
 		n:                    0,

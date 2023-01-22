@@ -28,5 +28,5 @@ func main() {
 }
 ```
 
-## Future Improvements Needed
+## Future Improvements
 1. Possibly merge Bloom and BigBloom into one type

@@ -35,6 +35,13 @@ func TestNewBloomFromK(t *testing.T) {
 	assert.EqualError(t, err, "k cannot be less than 1")
 }
 
+func TestNewBloomFromBytes(t *testing.T) {
+	var bs [BLOOM_LEN]byte
+	// test zero k
+	_, err := NewBloomFromBytes(bs, 0)
+	assert.EqualError(t, err, "k cannot be less than 1")
+}
+
 // TestPutStr also tests PutBytes because PutStr calls PutBytes
 // most of put functionality tested in TestExistsStr
 func TestBloomPutStr(t *testing.T) {
@@ -104,9 +111,16 @@ func TestBloomExistsStr(t *testing.T) {
 
 }
 
-func TestBlooomCapacityConstaint(t *testing.T) {
+func TestBlooomCapacityConstraint(t *testing.T) {
+	// test loaded bloom filter
+	var bs [BLOOM_LEN]byte
+	b, err := NewBloomFromBytes(bs, 1)
+	assert.Nil(t, err)
+	err = b.AddCapacityConstraint(100)
+	assert.EqualError(t, err, "cannot add constraints to loaded bloom filters")
+
 	cap := 5
-	b, err := NewBloomFromK(testk)
+	b, err = NewBloomFromK(testk)
 	assert.Nil(t, err)
 	b.AddCapacityConstraint(cap)
 	for i := 0; i < cap; i++ {
@@ -131,9 +145,16 @@ func TestBlooomCapacityConstaint(t *testing.T) {
 	assert.EqualError(t, err, "false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
 }
 
-func TestBloomAccuracyConstaint(t *testing.T) {
+func TestBloomAccuracyConstraint(t *testing.T) {
+	// test loaded bloom filter
+	var bs [BLOOM_LEN]byte
+	b, err := NewBloomFromBytes(bs, 1)
+	assert.Nil(t, err)
+	err = b.AddAccuracyConstraint(.1)
+	assert.EqualError(t, err, "cannot add constraints to loaded bloom filters")
+
 	acc := float64(0.00000001)
-	b, err := NewBloomFromK(testk)
+	b, err = NewBloomFromK(testk)
 	assert.Nil(t, err)
 	b.AddAccuracyConstraint(acc)
 	_, err = b.PutStr("fail")
@@ -299,7 +320,7 @@ func TestCalcK(t *testing.T) {
 
 func TestConstraintsCompatible(t *testing.T) {
 
-	type constaintsTest struct {
+	type constraintsTest struct {
 		len      int
 		cap      int
 		acc      float64
@@ -307,7 +328,7 @@ func TestConstraintsCompatible(t *testing.T) {
 		expected bool
 	}
 
-	tests := []constaintsTest{
+	tests := []constraintsTest{
 		{
 			len:      32,
 			cap:      20,

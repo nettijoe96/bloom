@@ -67,6 +67,17 @@ func TestNewBigBloomAlloc(t *testing.T) {
 	}
 }
 
+func TestNewBigBloomFromBytes(t *testing.T) {
+	var bs []byte
+	// test empty bloom
+	_, err := NewBigBloomFromBytes(bs, 1)
+	assert.EqualError(t, err, "bloom filter length cannot be 0")
+	// test zero k
+	bs = make([]byte, 1)
+	_, err = NewBigBloomFromBytes(bs, 0)
+	assert.EqualError(t, err, "k cannot be less than 1")
+}
+
 // TestPutStr also tests PutBytes because PutStr calls PutBytes
 // most of put functionality tested in TestExistsStr
 func TestBigBloomPutStr(t *testing.T) {
@@ -177,6 +188,67 @@ func TestBigBloomAccuracy(t *testing.T) {
 	assert.Equal(t, float64(-1), b.Accuracy())
 
 	// rest of accuracy tested in TestFalsePositiveRate
+}
+
+func TestBigBlooomCapacityConstraint(t *testing.T) {
+	// test loaded bloom filter
+	bs := make([]byte, 32)
+	b, err := NewBigBloomFromBytes(bs, 1)
+	assert.Nil(t, err)
+	err = b.AddCapacityConstraint(100)
+	assert.EqualError(t, err, "cannot add constraints to loaded bloom filters")
+
+	cap := 5
+	b, err = NewBigBloomFromK(32, testk)
+	assert.Nil(t, err)
+	b.AddCapacityConstraint(cap)
+	for i := 0; i < cap; i++ {
+		_, err := b.PutStr(strconv.Itoa(i))
+		assert.Nil(t, err)
+	}
+	// test already added
+	_, err = b.PutStr(strconv.Itoa(0))
+	assert.Nil(t, err)
+	// should fail on 6th try
+	_, err = b.PutStr("fail")
+	assert.IsType(t, err, &CapacityError{})
+
+	// test capacity and accuracy incompatibility
+	cap = 1000
+	acc := .1
+	b, err = NewBigBloomFromK(32, testk)
+	assert.Nil(t, err)
+	err = b.AddAccuracyConstraint(acc)
+	assert.Nil(t, err)
+	err = b.AddCapacityConstraint(cap)
+	assert.EqualError(t, err, "false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
+}
+
+func TestBigBloomAccuracyConstraint(t *testing.T) {
+	// test loaded bloom filter
+	bs := make([]byte, 32)
+	b, err := NewBigBloomFromBytes(bs, 1)
+	assert.Nil(t, err)
+	err = b.AddAccuracyConstraint(.1)
+	assert.EqualError(t, err, "cannot add constraints to loaded bloom filters")
+
+	acc := float64(0.00000001)
+	b, err = NewBigBloomFromK(32, testk)
+	assert.Nil(t, err)
+	b.AddAccuracyConstraint(acc)
+	_, err = b.PutStr("fail")
+	assert.IsType(t, err, &AccuracyError{})
+
+	// test capacity and accuracy incompatibility
+	cap := 1000
+	acc = .1
+	b, err = NewBigBloomFromK(32, testk)
+	assert.Nil(t, err)
+	err = b.AddCapacityConstraint(cap)
+	assert.Nil(t, err)
+	err = b.AddAccuracyConstraint(acc) // accuracy call should fail
+	assert.EqualError(t, err, "false positive rate will be higher at full capacity than the maxFalsePositiveRate provided")
+
 }
 
 // tests huge bloom filter

@@ -48,6 +48,9 @@ type Bloom struct {
 
 	// optional, the maximum allowed false positive rate until no more entries accepted
 	maxFalsePositiveRate *float64
+
+	// is loaded using FromBytes. This is used to ignore accuracy calculations
+	isLoaded bool
 }
 
 type CapacityError struct {
@@ -81,6 +84,7 @@ func NewBloomFromK(k int) (*Bloom, error) {
 		len:                  BLOOM_LEN,
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
+		isLoaded:             false,
 	}, nil
 }
 
@@ -95,6 +99,7 @@ func NewBloomFromCap(cap int) (*Bloom, error) {
 		len:                  BLOOM_LEN,
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
+		isLoaded:             false,
 	}, nil
 }
 
@@ -109,6 +114,25 @@ func NewBloomFromAcc(maxFalsePositiveRate float64) (*Bloom, error) {
 		len:                  BLOOM_LEN,
 		maxFalsePositiveRate: nil,
 		cap:                  nil,
+		isLoaded:             false,
+	}, nil
+}
+
+// Load bloom filter from bytes of bloom filter and k
+// This is useful for loading in a Bloom filter over the wire.
+// This mechanism will disable accuracy calculations because n is unknown
+func NewBloomFromBytes(bs [BLOOM_LEN]byte, k int) (*Bloom, error) {
+	if k < 1 {
+		return nil, errors.New("k cannot be less than 1")
+	}
+	return &Bloom{
+		n:                    0,
+		k:                    k,
+		bs:                   bs,
+		len:                  BLOOM_LEN,
+		maxFalsePositiveRate: nil,
+		cap:                  nil,
+		isLoaded:             true,
 	}, nil
 }
 
@@ -192,6 +216,9 @@ func (b *Bloom) ExistsBytes(bs []byte) (bool, float64) {
 
 // Get false positive rate
 func (b *Bloom) Accuracy() float64 {
+	if b.isLoaded {
+		return -1
+	}
 	if b.n == 0 {
 		return 1
 	}
@@ -200,6 +227,9 @@ func (b *Bloom) Accuracy() float64 {
 
 // Constrains bloom from not adding more than cap insertions
 func (b *Bloom) AddCapacityConstraint(cap int) error {
+	if b.isLoaded {
+		return errors.New("cannot add constraints to loaded bloom filters")
+	}
 	if cap < 1 {
 		return errors.New("capacity cannot be less than 1")
 	}
@@ -215,6 +245,9 @@ func (b *Bloom) AddCapacityConstraint(cap int) error {
 
 // Constrains bloom from not adding insertions that would cause accuracy to be worse than maxFalsePositiveRate
 func (b *Bloom) AddAccuracyConstraint(maxFalsePositiveRate float64) error {
+	if b.isLoaded {
+		return errors.New("cannot add constraints to loaded bloom filters")
+	}
 	if maxFalsePositiveRate <= 0 || maxFalsePositiveRate >= 1 {
 		return errors.New("false positive rate must be between 0 and 1")
 	}
